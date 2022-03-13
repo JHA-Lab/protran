@@ -76,14 +76,14 @@ def get_power(debug: bool = False):
 				elif line.startswith('DRAM Power:'):
 					dram_power = int(line.split(' ')[-2])
 
+		return {'cpu': cpu_power, 'gpu': gpu_power, 'dram': dram_power}
+
 	elif platform.system() == 'Linux':
 		raise RunTimeError(f'Linux is currently unsupported')
 	else:
 		raise RunTimeError(f'Unsupported OS: {platform.system()}')
 
 	if debug: print(f'CPU Power: {cpu_power} mW \t GPU Power: {gpu_power} mW \t DRAM Power: {dram_power} mW')
-
-	return {'cpu': cpu_power, 'gpu': gpu_power, 'dram': dram_power}
 
 
 def run_bert_inference(queue, gpu: bool, runs: int, output_dir: str):
