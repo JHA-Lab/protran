@@ -79,7 +79,17 @@ def get_power(debug: bool = False):
 		return {'cpu': cpu_power, 'gpu': gpu_power, 'dram': dram_power}
 
 	elif platform.system() == 'Linux':
-		raise RunTimeError(f'Linux is currently unsupported')
+		# Get raw output of nvidia-smi
+		power_stdout = subprocess.check_output(
+			f'nvidia-smi --query --display=POWER --id=0', # Assuming GPU-id to be 0 for now
+			shell=True, text=True)
+
+		power_stdout = power_stdout.split('\n')
+		for line in power_stdout:
+			if 'Draw' in line.split(): gpu_power = float(line.split()[-1])
+
+		return {'gpu': gpu_power}
+
 	else:
 		raise RunTimeError(f'Unsupported OS: {platform.system()}')
 
