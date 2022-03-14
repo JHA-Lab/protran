@@ -76,6 +76,8 @@ def get_power(debug: bool = False):
 				elif line.startswith('DRAM Power:'):
 					dram_power = int(line.split(' ')[-2])
 
+		if debug: print(f'CPU Power: {cpu_power} mW \t GPU Power: {gpu_power} mW \t DRAM Power: {dram_power} mW')
+
 		return {'cpu': cpu_power, 'gpu': gpu_power, 'dram': dram_power}
 
 	elif platform.system() == 'Linux':
@@ -86,14 +88,14 @@ def get_power(debug: bool = False):
 
 		power_stdout = power_stdout.split('\n')
 		for line in power_stdout:
-			if 'Draw' in line.split(): gpu_power = float(line.split()[-1])
+			if 'Draw' in line.split(): gpu_power = float(line.split()[-2])
+
+		if debug: print(f'GPU Power: {gpu_power} W')
 
 		return {'gpu': gpu_power}
 
 	else:
 		raise RunTimeError(f'Unsupported OS: {platform.system()}')
-
-	if debug: print(f'CPU Power: {cpu_power} mW \t GPU Power: {gpu_power} mW \t DRAM Power: {dram_power} mW')
 
 
 def run_bert_inference(queue, gpu: bool, runs: int, output_dir: str):
@@ -114,6 +116,7 @@ def run_bert_inference(queue, gpu: bool, runs: int, output_dir: str):
 			if platform.system() == 'Darwin':
 				run_glue_tf(get_training_args(0, output_dir))
 			else:
+				os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 				run_glue(get_training_args(0, output_dir))
 		else:
 			if platform.system() == 'Darwin':
@@ -147,13 +150,20 @@ def main():
 	# Get power consumption for first 5 iterations
 	for i in range(5):
 		power_metrics.append({'power_metrics': get_power(debug=True), 'time': time.time() - start_time})
+		if platform.system() == 'Linux': time.sleep(0.1)
 
 	# Inference starts at power_metrics[4]['time']
 	bert_process.start()
 
+	if platform.system() == 'Darwin':
+		iterations = 25
+	else:
+		iterations = 100
+
 	# Get power consumption for 10 more iterations
-	for i in range(25):
+	for i in range(iterations):
 		power_metrics.append({'power_metrics': get_power(debug=True), 'time': time.time() - start_time})
+		if platform.system() == 'Linux': time.sleep(0.1)
 
 	eval_metrics = bert_queue.get()
 	bert_process.join()
@@ -164,27 +174,41 @@ def main():
 		power_metrics[i]['time'] -= exp_start_time
 
 	# Make a plot of all power metrics
-	fig, (ax1, ax2, ax3) = plt.subplots(3, 1)
-	ax1.plot([meas['time'] for meas in power_metrics], [meas['power_metrics']['cpu']/1000.0 for meas in power_metrics], label='CPU Power', color='b')
-	ax2.plot([meas['time'] for meas in power_metrics], [meas['power_metrics']['gpu'] for meas in power_metrics], label='GPU Power', color='g')
-	ax3.plot([meas['time'] for meas in power_metrics], [meas['power_metrics']['dram']/1000.0 for meas in power_metrics], label='DRAM Power', color='r')
+	if platform.system() == 'Darwin':
+		fig, (ax1, ax2, ax3) = plt.subplots(3, 1)
+		ax1.plot([meas['time'] for meas in power_metrics], [meas['power_metrics']['cpu']/1000.0 for meas in power_metrics], label='CPU Power', color='b')
+		ax2.plot([meas['time'] for meas in power_metrics], [meas['power_metrics']['gpu'] for meas in power_metrics], label='GPU Power', color='g')
+		ax3.plot([meas['time'] for meas in power_metrics], [meas['power_metrics']['dram']/1000.0 for meas in power_metrics], label='DRAM Power', color='r')
 
-	ax1.axvline(x=power_metrics[4]['time'], linestyle='--', color='k')
-	ax1.axvline(x=power_metrics[4]['time']+eval_metrics['eval_runtime'], linestyle='--', color='k')
-	ax2.axvline(x=power_metrics[4]['time'], linestyle='--', color='k')
-	ax2.axvline(x=power_metrics[4]['time']+eval_metrics['eval_runtime'], linestyle='--', color='k')
-	ax3.axvline(x=power_metrics[4]['time'], linestyle='--', color='k')
-	ax3.axvline(x=power_metrics[4]['time']+eval_metrics['eval_runtime'], linestyle='--', color='k')
+		ax1.axvline(x=power_metrics[4]['time'], linestyle='--', color='k')
+		ax1.axvline(x=power_metrics[4]['time']+eval_metrics['eval_runtime'], linestyle='--', color='k')
+		ax2.axvline(x=power_metrics[4]['time'], linestyle='--', color='k')
+		ax2.axvline(x=power_metrics[4]['time']+eval_metrics['eval_runtime'], linestyle='--', color='k')
+		ax3.axvline(x=power_metrics[4]['time'], linestyle='--', color='k')
+		ax3.axvline(x=power_metrics[4]['time']+eval_metrics['eval_runtime'], linestyle='--', color='k')
 
-	ax1.set_xlabel('Time (s)')
-	ax2.set_xlabel('Time (s)')
-	ax3.set_xlabel('Time (s)')
+		ax1.set_xlabel('Time (s)')
+		ax2.set_xlabel('Time (s)')
+		ax3.set_xlabel('Time (s)')
 
-	ax1.set_ylabel('CPU Power (W)')
-	ax2.set_ylabel('GPU Power (mW)')
-	ax3.set_ylabel('DRAM Power (W)')
+		ax1.set_ylabel('CPU Power (W)')
+		ax2.set_ylabel('GPU Power (mW)')
+		ax3.set_ylabel('DRAM Power (W)')
 
-	ax1.set_title(f'Model: BERT-Tiny | Task: SST-2 | Runtime: {eval_metrics["eval_runtime"] : 0.2f}s for {RUNS} runs')
+		ax1.set_title(f'Model: BERT-Tiny | Task: SST-2 | Runtime: {eval_metrics["eval_runtime"] : 0.2f}s for {RUNS} runs')
+	elif platform.system() == 'Linux':
+		fig, ax1 = plt.subplots(1, 1)
+		ax1.plot([meas['time'] for meas in power_metrics], [meas['power_metrics']['gpu'] for meas in power_metrics], label='GPU Power', color='g')
+
+		ax1.axvline(x=power_metrics[4]['time'], linestyle='--', color='k')
+		ax1.axvline(x=power_metrics[4]['time']+eval_metrics['eval_runtime'], linestyle='--', color='k')
+
+		ax1.set_xlabel('Time (s)')
+
+		ax1.set_ylabel('GPU Power (W)')
+
+		ax1.set_title(f'Model: BERT-Tiny | Task: SST-2 | Runtime: {eval_metrics["eval_runtime"] : 0.2f}s for {RUNS} runs')
+
 	plt.savefig(os.path.join(OUTPUT_DIR, 'power_results.pdf'))
 
 	json.dump(power_metrics, open(os.path.join(OUTPUT_DIR, 'power_metrics.json'), 'w+'))
