@@ -83,7 +83,7 @@ def get_power(debug: bool = False):
 	elif platform.system() == 'Linux':
 		# Get raw output of nvidia-smi
 		power_stdout = subprocess.check_output(
-			f'nvidia-smi --query --display=POWER --id=0', # Assuming GPU-id to be 0 for now
+			f'nvidia-smi --query --display=POWER --id=1', # Assuming GPU-id to be 0 for now
 			shell=True, text=True)
 
 		power_stdout = power_stdout.split('\n')
@@ -116,7 +116,7 @@ def run_bert_inference(queue, gpu: bool, runs: int, output_dir: str):
 			if platform.system() == 'Darwin':
 				run_glue_tf(get_training_args(0, output_dir))
 			else:
-				os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+				os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 				run_glue(get_training_args(0, output_dir))
 		else:
 			if platform.system() == 'Darwin':
@@ -152,21 +152,35 @@ def main():
 		power_metrics.append({'power_metrics': get_power(debug=True), 'time': time.time() - start_time})
 		if platform.system() == 'Linux': time.sleep(0.1)
 
-	# Inference starts at power_metrics[4]['time']
+	# Start inference of BERT-Tiny for {RUNS} runs
 	bert_process.start()
 
 	if platform.system() == 'Darwin':
 		iterations = 25
 	else:
-		iterations = 100
+		iterations = 120
+
+	# Initialize evaluation runtime variables
+	eval_start_time = 0
+	eval_runtime = 0
 
 	# Get power consumption for 10 more iterations
 	for i in range(iterations):
 		power_metrics.append({'power_metrics': get_power(debug=True), 'time': time.time() - start_time})
 		if platform.system() == 'Linux': time.sleep(0.1)
+		if bert_process.is_alive() and eval_start_time == 0:
+			eval_start_time = time.time() - start_time
+		if not bert_process.is_alive() and eval_runtime == 0:
+			eval_runtime = time.time() - eval_start_time - start_time
 
+	# Get metrics from common queue
 	eval_metrics = bert_queue.get()
+
+	# Join process
 	bert_process.join()
+
+	# Update evaluation metrics with better runtime estimate
+	eval_metrics['eval_runtime'] = eval_runtime
 
 	# Fix timing
 	exp_start_time = power_metrics[0]['time']
@@ -180,12 +194,12 @@ def main():
 		ax2.plot([meas['time'] for meas in power_metrics], [meas['power_metrics']['gpu'] for meas in power_metrics], label='GPU Power', color='g')
 		ax3.plot([meas['time'] for meas in power_metrics], [meas['power_metrics']['dram']/1000.0 for meas in power_metrics], label='DRAM Power', color='r')
 
-		ax1.axvline(x=power_metrics[4]['time'], linestyle='--', color='k')
-		ax1.axvline(x=power_metrics[4]['time']+eval_metrics['eval_runtime'], linestyle='--', color='k')
-		ax2.axvline(x=power_metrics[4]['time'], linestyle='--', color='k')
-		ax2.axvline(x=power_metrics[4]['time']+eval_metrics['eval_runtime'], linestyle='--', color='k')
-		ax3.axvline(x=power_metrics[4]['time'], linestyle='--', color='k')
-		ax3.axvline(x=power_metrics[4]['time']+eval_metrics['eval_runtime'], linestyle='--', color='k')
+		ax1.axvline(x=eval_start_time, linestyle='--', color='k')
+		ax1.axvline(x=eval_start_time+eval_metrics['eval_runtime'], linestyle='--', color='k')
+		ax2.axvline(x=eval_start_time, linestyle='--', color='k')
+		ax2.axvline(x=eval_start_time+eval_metrics['eval_runtime'], linestyle='--', color='k')
+		ax3.axvline(x=eval_start_time, linestyle='--', color='k')
+		ax3.axvline(x=eval_start_time+eval_metrics['eval_runtime'], linestyle='--', color='k')
 
 		ax1.set_xlabel('Time (s)')
 		ax2.set_xlabel('Time (s)')
@@ -196,12 +210,13 @@ def main():
 		ax3.set_ylabel('DRAM Power (W)')
 
 		ax1.set_title(f'Model: BERT-Tiny | Task: SST-2 | Runtime: {eval_metrics["eval_runtime"] : 0.2f}s for {RUNS} runs')
+
 	elif platform.system() == 'Linux':
 		fig, ax1 = plt.subplots(1, 1)
 		ax1.plot([meas['time'] for meas in power_metrics], [meas['power_metrics']['gpu'] for meas in power_metrics], label='GPU Power', color='g')
 
-		ax1.axvline(x=power_metrics[4]['time'], linestyle='--', color='k')
-		ax1.axvline(x=power_metrics[4]['time']+eval_metrics['eval_runtime'], linestyle='--', color='k')
+		ax1.axvline(x=eval_start_time, linestyle='--', color='k')
+		ax1.axvline(x=eval_start_time+eval_metrics['eval_runtime'], linestyle='--', color='k')
 
 		ax1.set_xlabel('Time (s)')
 
