@@ -83,7 +83,7 @@ def get_power(debug: bool = False):
 	elif platform.system() == 'Linux':
 		# Get raw output of nvidia-smi
 		power_stdout = subprocess.check_output(
-			f'nvidia-smi --query --display=POWER --id=1', # Assuming GPU-id to be 0 for now
+			f'nvidia-smi --query --display=POWER --id=0', # Assuming GPU-id to be 0 for now
 			shell=True, text=True)
 
 		power_stdout = power_stdout.split('\n')
@@ -116,7 +116,7 @@ def run_bert_inference(queue, gpu: bool, runs: int, output_dir: str):
 			if platform.system() == 'Darwin':
 				run_glue_tf(get_training_args(0, output_dir))
 			else:
-				os.environ['CUDA_VISIBLE_DEVICES'] = '1'
+				os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 				run_glue(get_training_args(0, output_dir))
 		else:
 			if platform.system() == 'Darwin':
