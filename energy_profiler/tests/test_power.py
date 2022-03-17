@@ -11,6 +11,7 @@ import time
 import subprocess
 import json
 import shlex
+import numpy as np
 import multiprocessing as mp
 from matplotlib import pyplot as plt
 
@@ -137,6 +138,12 @@ def run_bert_inference(queue, gpu: bool, runs: int, output_dir: str):
 	queue.put(eval_metrics)
 
 
+def find_nearest(array, value):
+	array = np.asarray(array)
+	idx = (np.abs(array - value)).argmin()
+	return array[idx], idx
+
+
 def main():
 	# Get mutliprocessing queue
 	bert_queue = mp.Queue()
@@ -187,8 +194,20 @@ def main():
 	for i in range(len(power_metrics)):
 		power_metrics[i]['time'] -= exp_start_time
 
-	# Make a plot of all power metrics
+	# Make a plot of all power metrics and get energy
 	if platform.system() == 'Darwin':
+		# Get energy
+		_, eval_start_idx = find_nearest([meas['time'] for meas in power_metrics], eval_start_time)
+		_, eval_end_idx = find_nearest([meas['time'] for meas in power_metrics], eval_start_time+eval_metrics['eval_runtime'])
+		cpu_energy = np.trapz([meas['power_metrics']['cpu']/1000 for meas in power_metrics][eval_start_idx:eval_end_idx], 
+			[meas['time'] for meas in power_metrics][eval_start_idx:eval_end_idx])
+		gpu_energy = np.trapz([meas['power_metrics']['gpu']/1000 for meas in power_metrics][eval_start_idx:eval_end_idx], 
+			[meas['time'] for meas in power_metrics][eval_start_idx:eval_end_idx])
+		dram_energy = np.trapz([meas['power_metrics']['dram']/1000 for meas in power_metrics][eval_start_idx:eval_end_idx], 
+			[meas['time'] for meas in power_metrics][eval_start_idx:eval_end_idx])
+		total_energy = cpu_energy + gpu_energy + dram_energy
+
+		# Make plot
 		fig, (ax1, ax2, ax3) = plt.subplots(3, 1)
 		ax1.plot([meas['time'] for meas in power_metrics], [meas['power_metrics']['cpu']/1000.0 for meas in power_metrics], label='CPU Power', color='b')
 		ax2.plot([meas['time'] for meas in power_metrics], [meas['power_metrics']['gpu'] for meas in power_metrics], label='GPU Power', color='g')
@@ -209,9 +228,16 @@ def main():
 		ax2.set_ylabel('GPU Power (mW)')
 		ax3.set_ylabel('DRAM Power (W)')
 
-		ax1.set_title(f'Model: BERT-Tiny | Task: SST-2 | Runtime: {eval_metrics["eval_runtime"] : 0.2f}s for {RUNS} runs')
+		ax1.set_title(f'Model: BERT-Tiny | Task: SST-2 \n Energy: {total_energy/RUNS : 0.2f}J/run | Runtime: {eval_metrics["eval_runtime"] : 0.2f}s for {RUNS} runs')
 
 	elif platform.system() == 'Linux':
+		# Get energy
+		_, eval_start_idx = find_nearest([meas['time'] for meas in power_metrics], eval_start_time)
+		_, eval_end_idx = find_nearest([meas['time'] for meas in power_metrics], eval_start_time+eval_metrics['eval_runtime'])
+		gpu_energy = np.trapz([meas['power_metrics']['gpu'] for meas in power_metrics][eval_start_idx:eval_end_idx], 
+			[meas['time'] for meas in power_metrics][eval_start_idx:eval_end_idx])
+
+		# Make plot
 		fig, ax1 = plt.subplots(1, 1)
 		ax1.plot([meas['time'] for meas in power_metrics], [meas['power_metrics']['gpu'] for meas in power_metrics], label='GPU Power', color='g')
 
@@ -222,7 +248,7 @@ def main():
 
 		ax1.set_ylabel('GPU Power (W)')
 
-		ax1.set_title(f'Model: BERT-Tiny | Task: SST-2 | Runtime: {eval_metrics["eval_runtime"] : 0.2f}s for {RUNS} runs')
+		ax1.set_title(f'Model: BERT-Tiny | Task: SST-2 \n Energy: {gpu_energy/RUNS : 0.2f}J/run | Runtime: {eval_metrics["eval_runtime"] : 0.2f}s for {RUNS} runs')
 
 	plt.savefig(os.path.join(OUTPUT_DIR, 'power_results.pdf'))
 
