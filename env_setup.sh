@@ -81,9 +81,6 @@ else
 	pip install tabulate
 	pip install optuna
 
-	# Check installation
-	python check_install.py
-
 	# Install additional libraries
 	conda install -c conda-forge treelib
 fi
