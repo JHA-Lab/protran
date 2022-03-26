@@ -9,6 +9,9 @@ then
 
 	# Install additional libraries
 	conda install -c conda-forge treelib
+	if [ -d "/home/pi" ]; then
+		pip intall pi-ina219
+	fi
 else
 	cd txf_design-space
 
@@ -35,8 +38,19 @@ else
 	elif [ "$(expr substr $(uname -s) 1 5)" == "Linux" ]; then
 		# GNU/Linux platform
 
+		# Rust needs to be installed
+		curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
 		# module load anaconda3/2020.11
-		conda create --name txf_design-space pytorch torchvision torchaudio cudatoolkit=11.1 --channel pytorch --channel nvidia
+		if [ -d "/home/pi" ]; then
+			# Raspberry Pi platform does not have GPU
+			# Conda can be installed from here - https://github.com/conda-forge/miniforge
+
+			# Install environment
+			conda create --name txf_design-space pytorch numpy --channel kumatea # https://github.com/KumaTea/pytorch-aarch64
+		else
+			conda create --name txf_design-space pytorch torchvision torchaudio cudatoolkit=11.1 --channel pytorch --channel nvidia
+		fi
 
 	elif [ "$(expr substr $(uname -s) 1 10)" == "MINGW32_NT" ]; then
 		# 32 bits Windows NT platform
@@ -83,4 +97,7 @@ else
 
 	# Install additional libraries
 	conda install -c conda-forge treelib
+	if [ -d "/home/pi" ]; then
+		pip intall pi-ina219
+	fi
 fi
