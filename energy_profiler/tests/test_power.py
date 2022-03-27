@@ -22,6 +22,8 @@ if platform.system() == 'Darwin':
 	# Running tensorflow version for macOS on arm64
 	from run_glue_tf import main as run_glue_tf
 	import tensorflow as tf
+if os.path.exists('/home/pi'):
+	from ina219 import INA219
 	
 
 sys.path.append('../../txf_design-space/transformers/src/transformers')
@@ -30,6 +32,9 @@ sys.path.append('../../txf_design-space/transformers/src/transformers')
 OUTPUT_DIR = './bert_tiny_sst2'
 RUNS = 3
 USE_GPU = True
+
+SHUNT_OHMS = 0.1
+INA_ADDRESS = 0x45
 
 
 def get_training_args(seed, output_dir):
@@ -82,18 +87,31 @@ def get_power(debug: bool = False):
 		return {'cpu': cpu_power, 'gpu': gpu_power, 'dram': dram_power}
 
 	elif platform.system() == 'Linux':
-		# Get raw output of nvidia-smi
-		power_stdout = subprocess.check_output(
-			f'nvidia-smi --query --display=POWER --id=0', # Assuming GPU-id to be 0 for now
-			shell=True, text=True)
 
-		power_stdout = power_stdout.split('\n')
-		for line in power_stdout:
-			if 'Draw' in line.split(): gpu_power = float(line.split()[-2])
+		if os.path.exists('/home/pi/'):
+			# To get address of the sensor, use command: sudo i2cdetect -y 1
+			# For I2C pinout on Raspberry Pi can be found here: https://pinout.xyz/pinout/i2c
+			ina = INA219(shunt_ohms=SHUNT_OHMS, address=INA_ADDRESS)
+			ina.configure()
+			cpu_power = ina.power()
 
-		if debug: print(f'GPU Power: {gpu_power} W')
+			if debug: print(f'CPU Power: {cpu_power} mW')
 
-		return {'gpu': gpu_power}
+			# TODO: Add support for measuring NPU in Intel NCS2 and CPU/GPU power in Nvidia Jetson Nano
+			return {'cpu': cpu_power}
+		else:
+			# Get raw output of nvidia-smi
+			power_stdout = subprocess.check_output(
+				f'nvidia-smi --query --display=POWER --id=0', # Assuming GPU-id to be 0 for now
+				shell=True, text=True)
+
+			power_stdout = power_stdout.split('\n')
+			for line in power_stdout:
+				if 'Draw' in line.split(): gpu_power = float(line.split()[-2])
+
+			if debug: print(f'GPU Power: {gpu_power} W')
+
+			return {'gpu': gpu_power}
 
 	else:
 		raise RunTimeError(f'Unsupported OS: {platform.system()}')
@@ -234,21 +252,30 @@ def main():
 		# Get energy
 		_, eval_start_idx = find_nearest([meas['time'] for meas in power_metrics], eval_start_time)
 		_, eval_end_idx = find_nearest([meas['time'] for meas in power_metrics], eval_start_time+eval_metrics['eval_runtime'])
-		gpu_energy = np.trapz([meas['power_metrics']['gpu'] for meas in power_metrics][eval_start_idx:eval_end_idx], 
+
+		if os.path.exists('/home/pi'):
+			device = 'cpu'
+			energy_mult = 1000
+		else:
+			device = 'gpu'
+			energy_mult = 1
+
+		energy = np.trapz([meas['power_metrics'][device]/energy_mult for meas in power_metrics][eval_start_idx:eval_end_idx], 
 			[meas['time'] for meas in power_metrics][eval_start_idx:eval_end_idx])
 
 		# Make plot
 		fig, ax1 = plt.subplots(1, 1)
-		ax1.plot([meas['time'] for meas in power_metrics], [meas['power_metrics']['gpu'] for meas in power_metrics], label='GPU Power', color='g')
+		ax1.plot([meas['time'] for meas in power_metrics], [meas['power_metrics'][device] for meas in power_metrics], label=f'{device.upper()} Power', 
+			color='g' if device == 'gpu' else 'b')
 
 		ax1.axvline(x=eval_start_time, linestyle='--', color='k')
 		ax1.axvline(x=eval_start_time+eval_metrics['eval_runtime'], linestyle='--', color='k')
 
 		ax1.set_xlabel('Time (s)')
 
-		ax1.set_ylabel('GPU Power (W)')
+		ax1.set_ylabel(f'{device.upper()} Power ({"W" if device == "cpu" else "mW"})')
 
-		ax1.set_title(f'Model: BERT-Tiny | Task: SST-2 \n Energy: {gpu_energy/RUNS : 0.2f}J/run | Runtime: {eval_metrics["eval_runtime"] : 0.2f}s for {RUNS} runs')
+		ax1.set_title(f'Model: BERT-Tiny | Task: SST-2 \n Energy: {energy/RUNS : 0.2f}J/run | Runtime: {eval_metrics["eval_runtime"] : 0.2f}s for {RUNS} runs')
 
 	plt.savefig(os.path.join(OUTPUT_DIR, 'power_results.pdf'))
 
