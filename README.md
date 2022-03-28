@@ -10,6 +10,7 @@ This repository uses the FlexiBERT framework ([jha-lab/txf_design-space](https:/
 ## Table of Contents
 - [Environment Setup](#environment-setup)
   - [Clone this repository](#clone-this-repository)
+  - [Setup conda](#setup-conda)
   - [Setup python environment](#setup-python-environment)
 - [Replicating results](#replicating-results)
 
@@ -20,6 +21,15 @@ This repository uses the FlexiBERT framework ([jha-lab/txf_design-space](https:/
 ```
 git clone --recurse-submodules https://github.com/shikhartuli/protran.git
 cd protran
+```
+
+### Setup conda
+
+For Unix-like platforms, download and install [conda](https://docs.conda.io/en/latest/) through [miniforge](https://github.com/conda-forge/miniforge):
+
+```
+curl -L -O "https://github.com/conda-forge/miniforge/releases/latest/download/Mambaforge-$(uname)-$(uname -m).sh"
+bash Mambaforge-$(uname)-$(uname -m).sh
 ```
 
 ### Setup python environment  
