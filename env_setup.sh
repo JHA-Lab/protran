@@ -23,7 +23,7 @@ else
 		curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 		# Install environment
-		conda create --name txf_design-space pytorch --channel pytorch
+		conda create --name txf_design-space python=3.9 pytorch --channel pytorch
 
 		# Install tensorflow dependencies
 		conda install -c apple tensorflow-deps
@@ -47,22 +47,28 @@ else
 			# Conda can be installed from here - https://github.com/conda-forge/miniforge
 
 			# Install environment
-			conda create --name txf_design-space pytorch numpy --channel kumatea # https://github.com/KumaTea/pytorch-aarch64
+			conda create --name txf_design-space python=3.9 pytorch numpy --channel kumatea # https://github.com/KumaTea/pytorch-aarch64
 		else
-			conda create --name txf_design-space pytorch torchvision torchaudio cudatoolkit=11.1 --channel pytorch --channel nvidia
+			conda create --name txf_design-space python=3.9 pytorch torchvision torchaudio cudatoolkit=11.1 --channel pytorch --channel nvidia
+
+			# Install openvivo-dev for Intel NCS2
+			conda activate txf_design-space
+			pip install openvino-dev[pytorch,onnx]==2021.4.2
+			sudo apt install libpython3.9
+			conda deactivate
 		fi
 
 	elif [ "$(expr substr $(uname -s) 1 10)" == "MINGW32_NT" ]; then
 		# 32 bits Windows NT platform
 
 		# module load anaconda3/2020.11
-		conda create --name txf_design-space pytorch torchvision torchaudio cudatoolkit=11.1 --channel pytorch --channel nvidia
+		conda create --name txf_design-space python=3.9 pytorch torchvision torchaudio cudatoolkit=11.1 --channel pytorch --channel nvidia
 
 	elif [ "$(expr substr $(uname -s) 1 10)" == "MINGW64_NT" ]; then
 		# 64 bits Windows NT platform
 
 		# module load anaconda3/2020.11
-		conda create --name txf_design-space pytorch torchvision torchaudio cudatoolkit=11.1 --channel pytorch --channel nvidia
+		conda create --name txf_design-space python=3.9 pytorch torchvision torchaudio cudatoolkit=11.1 --channel pytorch --channel nvidia
 	fi
 
 	conda activate txf_design-space
