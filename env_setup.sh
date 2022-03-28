@@ -11,6 +11,12 @@ then
 	conda install -c conda-forge treelib
 	if [ -d "/home/pi" ]; then
 		pip intall pi-ina219
+	else
+		# Install openvivo-dev for Intel NCS2
+		conda activate txf_design-space
+		pip install openvino-dev[pytorch,onnx]==2021.4.2
+		sudo apt install libpython3.9
+		conda deactivate
 	fi
 else
 	cd txf_design-space
