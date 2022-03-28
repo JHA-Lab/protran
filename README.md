@@ -1,6 +1,6 @@
 # ProTran: Profiling the Energy of Transformers on Embedded Platforms
 
-![Python Version](https://img.shields.io/badge/python-v3.6%20%7C%20v3.7%20%7C%20v3.8-blue)
+![Python Version](https://img.shields.io/badge/python-v3.6%20%7C%20v3.7%20%7C%20v3.8%20%7C%20v3.9-blue)
 ![Conda](https://img.shields.io/badge/conda%7Cconda--forge-v4.8.3-blue)
 ![PyTorch](https://img.shields.io/badge/pytorch-v1.8.1-e74a2b)
 
