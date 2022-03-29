@@ -13,7 +13,7 @@ then
 	# Install additional libraries
 	conda install -c conda-forge treelib
 	if [ -d "/home/pi" ]; then
-		pip intall pi-ina219
+		pip install pi-ina219
 	else
 		# Install openvivo-dev for Intel NCS2
 		conda activate txf_design-space
@@ -122,6 +122,6 @@ else
 	# Install additional libraries
 	conda install -c conda-forge treelib
 	if [ -d "/home/pi" ]; then
-		pip intall pi-ina219
+		pip install pi-ina219
 	fi
 fi
