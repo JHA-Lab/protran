@@ -3,8 +3,8 @@
 # Script to install required packages in conda from the FlexiBERT repo
 # Author : Shikhar Tuli
 
-BLUE='\033[0;34m'
-ENDC='\033[0m'
+BOLDYELLOW='\e[1;33m'
+ENDC='\e[0m'
 
 if { conda env list | grep ".*txf_design-space*"; } >/dev/null 2>&1
 then
@@ -27,7 +27,7 @@ else
 	if [ "$(uname)" == "Darwin" ]; then
 		# Mac OS X platform
 		# Conda can be installed from here - https://github.com/conda-forge/miniforge
-		echo -e "${BLUE}Platform discovered: macOS${ENDC}"
+		echo -e "${BOLDYELLOW}Platform discovered: macOS${ENDC}"
 
 		# Rust needs to be installed
 		curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
@@ -52,7 +52,7 @@ else
 		if [ -d "/home/pi" ]; then
 			# Raspberry Pi platform does not have GPU
 			# Conda can be installed from here - https://github.com/conda-forge/miniforge
-			echo -e "${BLUE}Platform discovered: Linux on Raspberry Pi${ENDC}"
+			echo -e "${BOLDYELLOW}Platform discovered: Linux on Raspberry Pi${ENDC}"
 
 			# Rust needs to be installed
 			curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
@@ -60,7 +60,7 @@ else
 			# Install environment
 			conda create --name txf_design-space python=3.9 pytorch numpy --channel kumatea # https://github.com/KumaTea/pytorch-aarch64
 		else
-			echo -e "${BLUE}Platform discovered: GNU Linux${ENDC}"
+			echo -e "${BOLDYELLOW}Platform discovered: GNU Linux${ENDC}"
 
 			# Rust needs to be installed
 			curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
@@ -76,14 +76,14 @@ else
 
 	elif [ "$(expr substr $(uname -s) 1 10)" == "MINGW32_NT" ]; then
 		# 32 bits Windows NT platform
-		echo -e "${BLUE}Platform discovered: Windows NT (32-bit)${ENDC}"
+		echo -e "${BOLDYELLOW}Platform discovered: Windows NT (32-bit)${ENDC}"
 
 		# module load anaconda3/2020.11
 		conda create --name txf_design-space python=3.9 pytorch torchvision torchaudio cudatoolkit=11.1 --channel pytorch --channel nvidia
 
 	elif [ "$(expr substr $(uname -s) 1 10)" == "MINGW64_NT" ]; then
 		# 64 bits Windows NT platform
-		echo -e "${BLUE}Platform discovered: Windows NT (64-bit)${ENDC}"
+		echo -e "${BOLDYELLOW}Platform discovered: Windows NT (64-bit)${ENDC}"
 
 		# module load anaconda3/2020.11
 		conda create --name txf_design-space python=3.9 pytorch torchvision torchaudio cudatoolkit=11.1 --channel pytorch --channel nvidia
