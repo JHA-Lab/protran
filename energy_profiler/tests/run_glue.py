@@ -376,6 +376,8 @@ def main(args):
         )
         result = tokenizer(*args, padding=padding, max_length=max_seq_length, truncation=True)
 
+        # print(result.keys(), np.array(result['input_ids']).shape, np.array(result['attention_mask']).shape)
+
         # Map labels to IDs (not necessary for GLUE tasks)
         if label_to_id is not None and "label" in examples:
             result["label"] = [(label_to_id[l] if l != -1 else -1) for l in examples["label"]]
@@ -393,6 +395,12 @@ def main(args):
         if "validation" not in datasets and "validation_matched" not in datasets:
             raise ValueError("--do_eval requires a validation dataset")
         eval_dataset = datasets["validation_matched" if data_args.task_name == "mnli" else "validation"]
+
+        # Fix bugs in dataset loading for RPi
+        if os.path.exists('/home/pi'):
+            eval_dataset = datasets["validation_matched" if data_args.task_name == "mnli" else "train"]
+            eval_dataset = eval_dataset.select(range(datasets["validation_matched" if data_args.task_name == "mnli" else "validation"].num_rows))
+
         if data_args.max_val_samples is not None:
             eval_dataset = eval_dataset.select(range(data_args.max_val_samples))
 
