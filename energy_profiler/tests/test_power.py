@@ -177,7 +177,7 @@ def main():
 		power_metrics.append({'power_metrics': get_power(debug=True), 'time': time.time() - start_time})
 		if platform.system() == 'Linux': 
 			if os.path.exists('/home/pi/'):
-				time.sleep(3)
+				time.sleep(4)
 			else:
 				time.sleep(0.1)
 
@@ -198,7 +198,7 @@ def main():
 		power_metrics.append({'power_metrics': get_power(debug=True), 'time': time.time() - start_time})
 		if platform.system() == 'Linux': 
 			if os.path.exists('/home/pi/'):
-				time.sleep(3)
+				time.sleep(4)
 			else:
 				time.sleep(0.1)
 		if bert_process.is_alive() and eval_start_time == 0:
