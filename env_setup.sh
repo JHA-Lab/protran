@@ -19,6 +19,7 @@ then
 		conda activate txf_design-space
 		pip install openvino-dev[pytorch,onnx]==2021.4.2
 		pip install onnxruntime
+		pip install transformers[onnx]
 		sudo apt install libpython3.9
 		conda deactivate
 	fi
@@ -72,6 +73,7 @@ else
 			conda activate txf_design-space
 			pip install openvino-dev[pytorch,onnx]==2021.4.2
 			pip install onnxruntime
+			pip install transformers[onnx]
 			sudo apt install libpython3.9
 			conda deactivate
 		fi
