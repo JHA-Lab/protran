@@ -31,7 +31,7 @@ sys.path.append('../../txf_design-space/transformers/src/transformers')
 
 OUTPUT_DIR = './bert_tiny_sst2'
 RUNS = 3
-USE_GPU = True
+USE_GPU = False
 
 SHUNT_OHMS = 0.1
 INA_ADDRESS = 0x45
@@ -95,7 +95,7 @@ def get_power(debug: bool = False):
 			ina.configure()
 			cpu_power = ina.power()
 
-			if debug: print(f'CPU Power: {cpu_power} mW')
+			if debug: print(f'CPU Power: {cpu_power : 0.02f} mW')
 
 			# TODO: Add support for measuring NPU in Intel NCS2 and CPU/GPU power in Nvidia Jetson Nano
 			return {'cpu': cpu_power}
@@ -175,7 +175,11 @@ def main():
 	# Get power consumption for first 5 iterations
 	for i in range(5):
 		power_metrics.append({'power_metrics': get_power(debug=True), 'time': time.time() - start_time})
-		if platform.system() == 'Linux': time.sleep(0.1)
+		if platform.system() == 'Linux': 
+			if os.path.exists('/home/pi/'):
+				time.sleep(3)
+			else:
+				time.sleep(0.1)
 
 	# Start inference of BERT-Tiny for {RUNS} runs
 	bert_process.start()
@@ -192,7 +196,11 @@ def main():
 	# Get power consumption for 10 more iterations
 	for i in range(iterations):
 		power_metrics.append({'power_metrics': get_power(debug=True), 'time': time.time() - start_time})
-		if platform.system() == 'Linux': time.sleep(0.1)
+		if platform.system() == 'Linux': 
+			if os.path.exists('/home/pi/'):
+				time.sleep(3)
+			else:
+				time.sleep(0.1)
 		if bert_process.is_alive() and eval_start_time == 0:
 			eval_start_time = time.time() - start_time
 		if not bert_process.is_alive() and eval_runtime == 0:
