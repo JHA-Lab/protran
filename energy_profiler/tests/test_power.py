@@ -24,29 +24,37 @@ if platform.system() == 'Darwin':
 	import tensorflow as tf
 if os.path.exists('/home/pi'):
 	from ina219 import INA219
+elif platform.system() == 'Linux':
+	from run_glue_onnx import main as run_glue_onnx
 	
 
 sys.path.append('../../txf_design-space/transformers/src/transformers')
 
 
 OUTPUT_DIR = './bert_tiny_sst2'
+ONNX_DIR = './bert_tiny_onnx'
+
+RPI_IP = '10.9.91.16'
+
 RUNS = 3
 USE_GPU = False
+USE_NCS = True # Either USE_GPU or USE_NSA should be true, when OS is Linux
 
 SHUNT_OHMS = 0.1
 INA_ADDRESS = 0x45
 
 
-def get_training_args(seed, output_dir):
+def get_training_args(seed, model_name_or_path, output_dir):
     a = "--seed {} \
     --do_eval \
     --max_seq_length 128 \
     --task_name sst2 \
     --per_device_train_batch_size 32 \
+    --per_device_eval_batch_size 1 \
     --learning_rate 1e-4 \
     --model_name_or_path {} \
     --output_dir {} \
-        ".format(seed, output_dir, output_dir)
+        ".format(seed, model_name_or_path, output_dir)
     return shlex.split(a)
 
 
@@ -100,24 +108,35 @@ def get_power(debug: bool = False):
 			# TODO: Add support for measuring NPU in Intel NCS2 and CPU/GPU power in Nvidia Jetson Nano
 			return {'cpu': cpu_power}
 		else:
-			# Get raw output of nvidia-smi
-			power_stdout = subprocess.check_output(
-				f'nvidia-smi --query --display=POWER --id=0', # Assuming GPU-id to be 0 for now
-				shell=True, text=True)
+			if USE_GPU:
+				# Get raw output of nvidia-smi
+				power_stdout = subprocess.check_output(
+					f'nvidia-smi --query --display=POWER --id=0', # Assuming GPU-id to be 0 for now
+					shell=True, text=True)
 
-			power_stdout = power_stdout.split('\n')
-			for line in power_stdout:
-				if 'Draw' in line.split(): gpu_power = float(line.split()[-2])
+				power_stdout = power_stdout.split('\n')
+				for line in power_stdout:
+					if 'Draw' in line.split(): gpu_power = float(line.split()[-2])
 
-			if debug: print(f'GPU Power: {gpu_power} W')
+				if debug: print(f'GPU Power: {gpu_power} W')
 
-			return {'gpu': gpu_power}
+				return {'gpu': gpu_power}
+			elif USE_NCS:
+				# SSH to RPi. We assume keys have been shared already (https://www.thegeekstuff.com/2008/11/3-steps-to-perform-ssh-login-without-password-using-ssh-keygen-ssh-copy-id/)
+				power_stdout = subprocess.check_output(
+					f'ssh pi@{RPI_IP} ". \'/home/pi/mambaforge/etc/profile.d/conda.sh\'; conda activate txf_design-space; python -c \'from ina219 import INA219; ina = INA219(shunt_ohms={SHUNT_OHMS}, address={INA_ADDRESS}); ina.configure(); print(ina.power())\'"',
+					shell=True, text=True)
+				npu_power = float(power_stdout)
+
+				if debug: print(f'NPU: {npu_power : 0.02f} mW')
+
+				return {'npu': npu_power}
 
 	else:
 		raise RunTimeError(f'Unsupported OS: {platform.system()}')
 
 
-def run_bert_inference(queue, gpu: bool, runs: int, output_dir: str):
+def run_bert_inference(queue, runs: int, output_dir: str):
 	"""Run inference of BERT-Tiny on the SST-2 task
 	
 	Args:
@@ -131,18 +150,22 @@ def run_bert_inference(queue, gpu: bool, runs: int, output_dir: str):
 	"""
 	start_time = time.time()
 	for i in range(runs):
-		if gpu:
+		if USE_GPU:
 			if platform.system() == 'Darwin':
-				run_glue_tf(get_training_args(0, output_dir))
+				run_glue_tf(get_training_args(0, output_dir, output_dir))
 			else:
 				os.environ['CUDA_VISIBLE_DEVICES'] = '0'
-				run_glue(get_training_args(0, output_dir))
+				run_glue(get_training_args(0, output_dir, output_dir))
+		elif USE_NCS:
+			if platform.system() != 'Linux':
+				raise RunTimeError('Flag variable "USE_NCS" is set to True, but only for Linux platform')
+			run_glue_onnx(get_training_args(0, os.path.join(ONNX_DIR, 'model.xml'), ONNX_DIR))
 		else:
 			if platform.system() == 'Darwin':
-				run_glue(get_training_args(0, output_dir))
+				run_glue(get_training_args(0, output_dir, output_dir))
 			else:
 				os.environ['CUDA_VISIBLE_DEVICES'] = ''
-				run_glue(get_training_args(0, output_dir))
+				run_glue(get_training_args(0, output_dir, output_dir))
 
 	end_time = time.time()
 
@@ -151,7 +174,10 @@ def run_bert_inference(queue, gpu: bool, runs: int, output_dir: str):
 			lines = file.readlines()
 		eval_metrics = {'eval_loss': float(lines[0].split(' ')[-1]), 'eval_accuracy': float(lines[1].split(' ')[-1]), 'eval_runtime': end_time - start_time}
 	else:
-		eval_metrics = json.load(open(os.path.join(output_dir, 'eval_results.json'), 'r'))
+		if USE_NCS:
+			eval_metrics = {'eval_loss': np.nan, 'eval_accuracy': np.nan, 'eval_runtime': end_time - start_time}
+		else:
+			eval_metrics = json.load(open(os.path.join(output_dir, 'eval_results.json'), 'r'))
 
 	queue.put(eval_metrics)
 
@@ -163,11 +189,19 @@ def find_nearest(array, value):
 
 
 def main():
+	# Check if user is root, in case USE_NCS is True
+	if USE_NCS:
+		stdout = subprocess.check_output('echo $USER', shell=True, text=True).strip()
+		if stdout != 'root':
+			raise RuntimeError('User should be "root" to use Intel NCS. Use: sudo -E su; source /home/<default_user>/.bashrc; conda activate txf_design-space')
+		else:
+			stdout = subprocess.check_output('rm -rf /tmp/mvnc.mutex', shell=True, text=True)
+
 	# Get mutliprocessing queue
 	bert_queue = mp.Queue()
 
 	# Get process
-	bert_process = mp.Process(target=run_bert_inference, args=(bert_queue, USE_GPU, RUNS, OUTPUT_DIR))
+	bert_process = mp.Process(target=run_bert_inference, args=(bert_queue, RUNS, OUTPUT_DIR))
 
 	start_time = time.time()
 	power_metrics = []
@@ -178,6 +212,8 @@ def main():
 		if platform.system() == 'Linux': 
 			if os.path.exists('/home/pi/'):
 				time.sleep(4)
+			elif USE_NCS:
+				time.sleep(1)
 			else:
 				time.sleep(0.1)
 
@@ -199,6 +235,8 @@ def main():
 		if platform.system() == 'Linux': 
 			if os.path.exists('/home/pi/'):
 				time.sleep(4)
+			elif USE_NCS:
+				time.sleep(1)
 			else:
 				time.sleep(0.1)
 		if bert_process.is_alive() and eval_start_time == 0:
@@ -264,9 +302,15 @@ def main():
 		if os.path.exists('/home/pi'):
 			device = 'cpu'
 			energy_mult = 1000
+			color = 'b'
+		elif USE_NCS:
+			device = 'npu'
+			energy_mult = 1000
+			color = 'tab:orange'
 		else:
 			device = 'gpu'
 			energy_mult = 1
+			color = 'g'
 
 		energy = np.trapz([meas['power_metrics'][device]/energy_mult for meas in power_metrics][eval_start_idx:eval_end_idx], 
 			[meas['time'] for meas in power_metrics][eval_start_idx:eval_end_idx])
@@ -274,14 +318,14 @@ def main():
 		# Make plot
 		fig, ax1 = plt.subplots(1, 1)
 		ax1.plot([meas['time'] for meas in power_metrics], [meas['power_metrics'][device] for meas in power_metrics], label=f'{device.upper()} Power', 
-			color='g' if device == 'gpu' else 'b')
+			color=color)
 
 		ax1.axvline(x=eval_start_time, linestyle='--', color='k')
 		ax1.axvline(x=eval_start_time+eval_metrics['eval_runtime'], linestyle='--', color='k')
 
 		ax1.set_xlabel('Time (s)')
 
-		ax1.set_ylabel(f'{device.upper()} Power ({"W" if device == "cpu" else "mW"})')
+		ax1.set_ylabel(f'{device.upper()} Power ({"W" if device == "gpu" else "mW"})')
 
 		ax1.set_title(f'Model: BERT-Tiny | Task: SST-2 \n Energy: {energy/RUNS : 0.2f}J/run | Runtime: {eval_metrics["eval_runtime"] : 0.2f}s for {RUNS} runs')
 
