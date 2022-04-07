@@ -118,7 +118,7 @@ def get_power(debug: bool = False):
 				for line in power_stdout:
 					if 'Draw' in line.split(): gpu_power = float(line.split()[-2])
 
-				if debug: print(f'GPU Power: {gpu_power} W')
+				if debug: print(f'GPU Power: {gpu_power : 0.02f} W')
 
 				return {'gpu': gpu_power}
 			elif USE_NCS:
