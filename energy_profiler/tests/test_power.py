@@ -34,11 +34,11 @@ sys.path.append('../../txf_design-space/transformers/src/transformers')
 OUTPUT_DIR = './bert_tiny_sst2'
 ONNX_DIR = './bert_tiny_onnx'
 
-RPI_IP = '10.9.91.16'
+RPI_IP = '10.9.173.6'
 
 RUNS = 3
 USE_GPU = False
-USE_NCS = True # Either USE_GPU or USE_NSA should be true, when OS is Linux
+USE_NCS = False # Either USE_GPU or USE_NCS should be true, when OS is Linux
 
 SHUNT_OHMS = 0.1
 INA_ADDRESS = 0x45
