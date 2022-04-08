@@ -62,6 +62,8 @@ else
 			# Install environment
 			conda create --name txf_design-space python=3.9 pytorch numpy --channel kumatea # https://github.com/KumaTea/pytorch-aarch64
 		elif [ -d "/home/nano" ]; then
+			# Jetson Nano platform has a Tegra X1 GPU
+			# Conda can be installed from here - https://github.com/conda-forge/miniforge
 			echo -e "${BOLDYELLOW}Platform discovered: Linux on Nvidia Jetson Nano${ENDC}"
 
 			# Rust needs to be installed
@@ -71,8 +73,8 @@ else
 			conda create --name txf_design-space python=3.6 
 
 			# Download and install pre-built wheel for Jetson Nano
-			wget https://nvidia.box.com/shared/static/p57jwntv436lfrd78inwl7iml6p13fzh.whl -O torch-1.8.0-cp36-cp36m-linux_aarch64.whl -O torch-1.9.0-cp36-cp36m-linux_aarch64.whl
-			sudo apt-get install python3-pip libopenblas-base libopenmpi-dev 
+			wget https://nvidia.box.com/shared/static/p57jwntv436lfrd78inwl7iml6p13fzh.whl -O torch-1.8.0-cp36-cp36m-linux_aarch64.whl -O torch-1.9.0-cp36-cp36m-linux_aarch64.whl # https://pytorch.org/blog/running-pytorch-models-on-jetson-nano/
+			sudo apt install python3-pip libopenblas-base libopenmpi-dev 
 			pip3 install Cython
 			pip3 install numpy torch-1.9.0-cp36-cp36m-linux_aarch64.whl
 			export OPENBLAS_CORETYPE=ARMV8
