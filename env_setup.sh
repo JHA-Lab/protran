@@ -61,6 +61,14 @@ else
 
 			# Install environment
 			conda create --name txf_design-space python=3.9 pytorch numpy --channel kumatea # https://github.com/KumaTea/pytorch-aarch64
+		elif  -d "/home/nano" ]; then
+			echo -e "${BOLDYELLOW}Platform discovered: Linux on Nvidia Jetson Nano${ENDC}"
+
+			# Rust needs to be installed
+			curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+			
+			# Install environment
+			conda create --name txf_design-space python=3.9 pytorch torchvision torchaudio cudatoolkit=10.2 --channel pytorch --channel nvidia
 		else
 			echo -e "${BOLDYELLOW}Platform discovered: GNU Linux${ENDC}"
 
