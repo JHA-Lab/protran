@@ -24,8 +24,6 @@ if platform.system() == 'Darwin':
 	import tensorflow as tf
 if os.path.exists('/home/pi'):
 	from ina219 import INA219
-elif platform.system() == 'Linux':
-	from run_glue_onnx import main as run_glue_onnx
 	
 
 sys.path.append('../../txf_design-space/transformers/src/transformers')
@@ -37,8 +35,10 @@ ONNX_DIR = './bert_tiny_onnx'
 RPI_IP = '10.9.173.6'
 
 RUNS = 3
-USE_GPU = False
+USE_GPU = True
 USE_NCS = False # Either USE_GPU or USE_NCS should be true, when OS is Linux
+
+if USE_NCS: from run_glue_onnx import main as run_glue_onnx
 
 SHUNT_OHMS = 0.1
 INA_ADDRESS = 0x45
@@ -107,6 +107,18 @@ def get_power(debug: bool = False):
 
 			# TODO: Add support for measuring NPU in Intel NCS2 and CPU/GPU power in Nvidia Jetson Nano
 			return {'cpu': cpu_power}
+		elif os.path.exists('/home/nano/'):
+			# SSH to RPi. We assume keys have been shared already (https://www.thegeekstuff.com/2008/11/3-steps-to-perform-ssh-login-without-password-using-ssh-keygen-ssh-copy-id/)
+			power_stdout = subprocess.check_output(
+				f'ssh pi@{RPI_IP} ". \'/home/pi/mambaforge/etc/profile.d/conda.sh\'; conda activate txf_design-space; python -c \'from ina219 import INA219; ina = INA219(shunt_ohms={SHUNT_OHMS}, address={INA_ADDRESS}); ina.configure(); print(ina.power())\'"',
+				shell=True)
+			device_power = float(power_stdout)
+
+			device = 'gpu' if USE_GPU else 'cpu'
+
+			if debug: print(f'{device.upper()}: {device_power : 0.02f} mW')
+
+			return {device: device_power}
 		else:
 			if USE_GPU:
 				# Get raw output of nvidia-smi
@@ -308,9 +320,9 @@ def main():
 			energy_mult = 1000
 			color = 'tab:orange'
 		else:
-			device = 'gpu'
-			energy_mult = 1
-			color = 'g'
+			device = 'gpu' if USE_GPU else 'cpu'
+			energy_mult = 1 if not os.path.exists('/home/nano') else 1000
+			color = 'g' if USE_GPU else 'b'
 
 		energy = np.trapz([meas['power_metrics'][device]/energy_mult for meas in power_metrics][eval_start_idx:eval_end_idx], 
 			[meas['time'] for meas in power_metrics][eval_start_idx:eval_end_idx])
