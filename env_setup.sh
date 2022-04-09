@@ -73,11 +73,13 @@ else
 			conda create --name txf_design-space python=3.6 
 
 			# Download and install pre-built wheel for Jetson Nano
+			conda activate txf_design-space
 			wget https://nvidia.box.com/shared/static/p57jwntv436lfrd78inwl7iml6p13fzh.whl -O torch-1.8.0-cp36-cp36m-linux_aarch64.whl -O torch-1.9.0-cp36-cp36m-linux_aarch64.whl # https://pytorch.org/blog/running-pytorch-models-on-jetson-nano/
 			sudo apt install python3-pip libopenblas-base libopenmpi-dev 
 			pip3 install Cython
 			pip3 install numpy torch-1.9.0-cp36-cp36m-linux_aarch64.whl
 			export OPENBLAS_CORETYPE=ARMV8
+			conda deactivate
 		else
 			echo -e "${BOLDYELLOW}Platform discovered: GNU Linux${ENDC}"
 
