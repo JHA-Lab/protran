@@ -383,7 +383,12 @@ def main(args):
             result["label"] = [(label_to_id[l] if l != -1 else -1) for l in examples["label"]]
         return result
 
+    print(f'Dataset being mapped...')
+
     datasets = datasets.map(preprocess_function, batched=True, load_from_cache_file=not data_args.overwrite_cache)
+
+    print(f'Dataset mapped!')
+
     if training_args.do_train:
         if "train" not in datasets:
             raise ValueError("--do_train requires a train dataset")
@@ -396,8 +401,8 @@ def main(args):
             raise ValueError("--do_eval requires a validation dataset")
         eval_dataset = datasets["validation_matched" if data_args.task_name == "mnli" else "validation"]
 
-        # Fix bugs in dataset loading for RPi
-        if os.path.exists('/home/pi'):
+        # Fix bugs in dataset loading for RPi and Jetson Nano
+        if os.path.exists('/home/pi') or os.path.exists('/home/nano'):
             eval_dataset = datasets["validation_matched" if data_args.task_name == "mnli" else "train"]
             eval_dataset = eval_dataset.select(range(datasets["validation_matched" if data_args.task_name == "mnli" else "validation"].num_rows))
 
@@ -456,6 +461,9 @@ def main(args):
         data_collator=data_collator,
     )
 
+    logger.info(f'***Device: {trainer.args.device}***')
+
+
     # Training
     if training_args.do_train:
         checkpoint = None
@@ -483,6 +491,7 @@ def main(args):
     # Evaluation
     if training_args.do_eval:
         logger.info("*** Evaluate ***")
+        print('Running inference...')
 
         # Loop to handle MNLI double evaluation (matched, mis-matched)
         tasks = [data_args.task_name]
