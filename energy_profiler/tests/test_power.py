@@ -337,7 +337,7 @@ def main():
 
 		ax1.set_xlabel('Time (s)')
 
-		ax1.set_ylabel(f'{device.upper()} Power ({"W" if device == "gpu" else "mW"})')
+		ax1.set_ylabel(f'{device.upper()} Power ({"W" if energy_mult == 1 else "mW"})')
 
 		ax1.set_title(f'Model: BERT-Tiny | Task: SST-2 \n Energy: {energy/RUNS : 0.2f}J/run | Runtime: {eval_metrics["eval_runtime"] : 0.2f}s for {RUNS} runs')
 
