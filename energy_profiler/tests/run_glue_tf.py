@@ -51,6 +51,9 @@ from transformers import RobertaTokenizer, RobertaModel
 from transformers.models.bert.configuration_bert import BertConfig
 from transformers.models.bert.modeling_modular_bert import BertModelModular, BertForMaskedLMModular, BertForSequenceClassificationModular
 
+# TODO: Implement modular BERT in Tensorflow
+from transformers.models.bert.modeling_modular_tf_bert import TFBertModelModular, TFBertForMaskedLMModular, TFBertForSequenceClassificationModular
+
 hf_logging.set_verbosity_info()
 hf_logging.enable_default_handler()
 hf_logging.enable_explicit_format()
