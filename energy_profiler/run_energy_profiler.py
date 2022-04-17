@@ -61,6 +61,7 @@ if USE_NCS: from run_glue_onnx import main as run_glue_onnx
 RPI_IP = '10.9.173.6'
 
 CONVERGENCE_UNC_RATIO = 0.05 # Uncertainty w.r.t. the maximum performance value
+CONVERGENCE_PATIENCE = 5
 RANDOM_SAMPLES = 128 # Size of the random sample set to get predictions from surrogate models
 
 
@@ -170,12 +171,13 @@ def convert_to_tabular(dataset: dict, only_embeddings: bool = False):
 		return X_ds
 
 
-def init_surrogate_models(regressor: str, dataset: dict, surrogate_models_dir: str, debug: bool):
+def init_surrogate_models(regressor: str, dataset: dict, design_space: dict, surrogate_models_dir: str, debug: bool):
 	"""Initialize surrogate models for latency, energy and peak power
 	
 	Args:
 		regressor (str): regressor in ['gp', 'boshnas']
 		dataset (dict): dataset dictionary object
+		design_space (dict): design space loaded from the .yaml file
 		surrogate_models_dir (str): directory to store the surrogate models
 		debug (bool): to print debug statements
 
@@ -389,7 +391,7 @@ def main():
 	num_evaluated = save_dataset(dataset, args.txf_dataset_file)
 
 	# Initialize surrogate models
-	surrogate_models = init_surrogate_models(args.regressor, dataset, args.surrogate_models_dir, args.debug)
+	surrogate_models = init_surrogate_models(args.regressor, dataset, design_space, args.surrogate_models_dir, args.debug)
 
 	# Get dataset from trained values
 	X, latency, energy, peak_power = convert_to_tabular(dataset)
@@ -418,7 +420,10 @@ def main():
 
 	max_uncertainties, num_evaluated_list = [], []
 
-	while max_uncertainty > 3 * CONVERGENCE_UNC_RATIO:
+	patience = 0
+	while max_uncertainty > 3 * CONVERGENCE_UNC_RATIO or patience < CONVERGENCE_PATIENCE:
+		if max_uncertainty <= 3 * CONVERGENCE_UNC_RATIO: patience += 1
+
 		# Get the most uncertain model
 		model_hash = list(random_samples.keys())[max_uncertainty_idx]
 
