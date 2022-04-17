@@ -180,7 +180,7 @@ def run_bert_inference(queue, device: str, max_seq_length: int, batch_size: int,
             if platform.system() == 'Darwin':
                 run_glue_tf(get_training_args(0, max_seq_length, batch_size, model_path, model_path))
             else:
-                os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+                # We assume only one GPU is avilable. Else, use: os.environ['CUDA_VISIBLE_DEVICES'] = '0'
                 run_glue(get_training_args(0, max_seq_length, batch_size, model_path, model_path))
         elif device == 'npu':
             if platform.system() != 'Linux':
@@ -304,8 +304,11 @@ def get_measures(device: str,
     eval_start_time = 0
     eval_runtime = 0
 
-    # Get power consumption for 10 more iterations
+    # Get power consumption for more iterations
+    start_counter, counter = False, 5
     for i in range(iterations):
+        if start_counter: counter -= 1 # Inference ended, run for 5 more iterations
+        if counter == 0: break
         power_metrics.append({'power_metrics': get_power(device=device, debug=True), 'time': time.time() - start_time})
         if platform.system() == 'Linux': 
             if os.path.exists('/home/pi/'):
@@ -318,6 +321,7 @@ def get_measures(device: str,
             eval_start_time = time.time() - start_time
         if not bert_process.is_alive() and eval_runtime == 0:
             eval_runtime = time.time() - eval_start_time - start_time
+            start_counter = True
 
     # Get metrics from common queue
     eval_metrics = bert_queue.get()
