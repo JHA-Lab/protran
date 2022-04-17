@@ -390,7 +390,7 @@ def get_measures(device: str,
             [meas['time'] for meas in power_metrics][eval_start_idx:eval_end_idx])
 
         # Get peak power in W
-        peak_power = max([meas['power_metrics'][device]for meas in power_metrics][eval_start_idx:eval_end_idx])/1000 
+        peak_power = max([meas['power_metrics'][device] for meas in power_metrics][eval_start_idx:eval_end_idx])/1000 
 
         # Make plot
         fig, ax1 = plt.subplots(1, 1)
