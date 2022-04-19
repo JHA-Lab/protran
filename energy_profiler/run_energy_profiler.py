@@ -53,7 +53,7 @@ GLUE_TASKS = ['cola', 'mnli', 'mrpc', 'qnli', 'qqp', 'rte', 'sst2', 'stsb', 'wnl
 PREFIX_CHECKPOINT_DIR = "checkpoint"
 
 INIT_SAMPLER = 'Lhs' # Should be in ['Sobol', 'Lhs', 'Halton', Hammersly']
-INIT_SAMPLES = 128 # Should be power of 2
+INIT_SAMPLES = 64 # Should be power of 2
 
 RUNS = 3
 
@@ -66,7 +66,7 @@ RPI_IP = '10.9.173.6'
 CONVERGENCE_UNC_RATIO = 0.05 # Uncertainty w.r.t. the maximum performance value
 CONVERGENCE_MSE = 0.02 # MSE of surrogate model on test set
 CONVERGENCE_PATIENCE = 5
-RANDOM_SAMPLES = 128 # Size of the random sample set to get predictions from surrogate models
+RANDOM_SAMPLES = 64 # Size of the random sample set to get predictions from surrogate models
 
 
 def worker(device: str, 
