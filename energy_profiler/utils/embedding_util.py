@@ -285,7 +285,7 @@ def get_samples(design_space: dict, num_samples: int, sampling_method='Lhs', deb
         all_model_dicts = narrow_model_dicts + wide_model_dicts
         all_model_types = narrow_model_types + wide_model_types
     else:
-        sampled_embeddings = sampler.rvs(num_samples, random_state=0)
+        sampled_embeddings = sampler.rvs(num_samples)
 
         valid_embeddings = [get_nearest_valid_embedding(embedding, design_space) for embedding in sampled_embeddings]
         model_dicts = [embedding_to_model_dict(embedding, design_space) for embedding in valid_embeddings]
