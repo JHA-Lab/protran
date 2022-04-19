@@ -64,6 +64,7 @@ if USE_NCS: from run_glue_onnx import main as run_glue_onnx
 RPI_IP = '10.9.173.6'
 
 CONVERGENCE_UNC_RATIO = 0.05 # Uncertainty w.r.t. the maximum performance value
+CONVERGENCE_MSE = 0.02 # MSE of surrogate model on test set
 CONVERGENCE_PATIENCE = 5
 RANDOM_SAMPLES = 128 # Size of the random sample set to get predictions from surrogate models
 
@@ -174,7 +175,7 @@ def convert_to_tabular(dataset: dict, only_embeddings: bool = False):
 		return X_ds
 
 
-def init_surrogate_models(regressor: str, dataset: dict, design_space: dict, surrogate_models_dir: str, debug: bool):
+def init_surrogate_models(regressor: str, dataset: dict, design_space: dict, surrogate_models_dir: str, debug: bool = False):
 	"""Initialize surrogate models for latency, energy and peak power
 	
 	Args:
@@ -182,7 +183,7 @@ def init_surrogate_models(regressor: str, dataset: dict, design_space: dict, sur
 		dataset (dict): dataset dictionary object
 		design_space (dict): design space loaded from the .yaml file
 		surrogate_models_dir (str): directory to store the surrogate models
-		debug (bool): to print debug statements
+		debug (bool, optional): to print debug statements
 
 	Returns:
 		latency_model, energy_model, peak_power_model (tuple): three surrogate models
@@ -364,6 +365,54 @@ def get_predictions(surrogate_models: tuple, X_ds):
 	return latency_predictions, energy_predictions, peak_power_predictions, max_uncertainty, max_uncertainty_idx
 
 
+def check_convergence(convergence_criterion: str, regressor: str, surrogate_models_dir: str, dataset: dict, design_space: dict, X: 'np.array', latency: 'np.array', energy: 'np.array', peak_power: 'np.array', max_uncertainty: float, debug: bool = False):
+    """Check if convergence has been reached
+    
+    Args:
+        convergence_criterion (str): convergence criterion to use, one in ['unc', 'mse']
+        regressor (str): regressor in ['boshnas', 'gp', 'dt', 'bdt']
+        surrogate_models_dir (str): directory to store the surrogate models
+		dataset (dict): dataset dictionary object
+		design_space (dict): design space loaded from the .yaml file
+        X (np.array): input embeddings
+        latency (np.array): latency values
+		energy (np.array): energy values
+		peak_power (np.array): power values
+        max_uncertainty (float): maximum uncertainty in random samples outside of X
+        debug (bool, optional): to print debugging statements
+    
+    Returns:
+        convergence_reached, mse (tuple): if convergence has been reached, and the mean squared error when 
+    """
+    global patience
+    convergence_reached, mse = False, np.nan
+
+    if not os.path.exists(surrogate_models_dir): os.makedirs(surrogate_models_dir)
+
+    if convergence_criterion == 'unc':
+    	if max_uncertainty <= 3 * CONVERGENCE_UNC_RATIO or patience > CONVERGENCE_PATIENCE:
+    		convergence_reached = True
+    	else:
+    		patience += 1
+    		convergence_reached = False
+    elif convergence_criterion == 'mse':
+    	len_dataset = X.shape[0]
+    	X_train, latency_train, energy_train, peak_power_train = X[:int(0.8 * len_dataset), :], latency[:int(0.8 * len_dataset)], energy[:int(0.8 * len_dataset)], peak_power[:int(0.8 * len_dataset)]
+    	X_test, latency_test, energy_test, peak_power_test = X[int(0.8 * len_dataset):, :], latency[int(0.8 * len_dataset):], energy[int(0.8 * len_dataset):], peak_power[int(0.8 * len_dataset):]
+
+    	surrogate_models = init_surrogate_models(regressor, dataset, design_space, surrogate_models_dir, debug)
+    	train_surrogate_models(surrogate_models, X_train, latency_train, energy_train, peak_power_train, surrogate_models_dir)
+
+    	latency_predictions, energy_predictions, peak_power_predictions, _, _ = get_predictions(surrogate_models, X_test)
+    	mse = mean_squared_error(latency_test, latency_predictions[:, 0]) + mean_squared_error(energy_test, energy_predictions[:, 0]) + mean_squared_error(peak_power_test, peak_power_predictions[:, 0])
+    	if mse < 3 * CONVERGENCE_MSE:
+    		convergence_reached = True
+
+    shutil.rmtree(surrogate_models_dir)
+
+    return convergence_reached, mse
+
+
 def main():
 	"""Run BOSHCODE to get the best CNN-Accelerator pair in the design space
 	"""
@@ -487,12 +536,10 @@ def main():
 
 	if args.debug: print(f'Current maximum epistemic uncertainty: {float(max_uncertainty.item()) : 0.3f}, with number of evaluated models: {num_evaluated}')
 
-	max_uncertainties, num_evaluated_list = [], []
+	max_uncertainties, mse_list, num_evaluated_list = [], [], []
 
-	patience = 0
-	while max_uncertainty > 3 * CONVERGENCE_UNC_RATIO or patience < CONVERGENCE_PATIENCE:
-		if max_uncertainty <= 3 * CONVERGENCE_UNC_RATIO: patience += 1
-
+	patience, convergence_reached = 0, False
+	while not convergence_reached:
 		# Get the most uncertain model
 		model_hash = list(random_samples.keys())[max_uncertainty_idx]
 
@@ -504,7 +551,7 @@ def main():
 
 		# Print prediciton error
 		if args.debug: 
-			print(f'Predicted values -- Latency: {latency_predictions[max_uncertainty_idx][0] * max_latency}s/seq, Energy: {energy_predictions[max_uncertainty_idx][0] * max_energy}J/seq, Peak power: {peak_power_predictions[max_uncertainty_idx][0] * max_peak_power}W')
+			print(f'Predicted values -- Latency: {latency_predictions[max_uncertainty_idx][0] * max_latency : 0.5f}s/seq, Energy: {energy_predictions[max_uncertainty_idx][0] * max_energy : 0.5f}J/seq, Peak power: {peak_power_predictions[max_uncertainty_idx][0] * max_peak_power : 0.5f}W')
 			print(f'Evaluated values -- Latency: {dataset[model_hash]["performance"]["latency"]}s/seq, Energy: {dataset[model_hash]["performance"]["energy"]}J/seq, Peak power: {dataset[model_hash]["performance"]["peak_power"]}W')
 
 		# Save dataset
@@ -524,14 +571,22 @@ def main():
 		# Get predictions from the surrogate models
 		latency_predictions, energy_predictions, peak_power_predictions, max_uncertainty, max_uncertainty_idx = get_predictions(surrogate_models, X_ds)
 
-		if args.debug: print(f'Current maximum epistemic uncertainty: {float(max_uncertainty.item()) : 0.3f}, with number of evaluated models: {num_evaluated}')
+		convergence_reached, mse = check_convergence(args.convergence_criterion, args.regressor, './temp', dataset, design_space, X, latency, energy, peak_power, max_uncertainty, args.debug)
 
-		num_evaluated_list.append(num_evaluated); max_uncertainties.append(max_uncertainty)
+		if args.debug: print(f'Current maximum epistemic uncertainty: {float(max_uncertainty.item()) : 0.3f}, and test mean-squared error: {mse : 0.3f}, with number of evaluated models: {num_evaluated}')
+
+		num_evaluated_list.append(num_evaluated); max_uncertainties.append(max_uncertainty); mse_list.append(mse)
 		plt.figure()
-		plt.plot(num_evaluated_list, max_uncertainties, '.')
+		plt.plot(num_evaluated_list, max_uncertainties)
 		plt.xlabel('Evaluated models')
 		plt.ylabel('Norm. max. epistemic uncertainty')
 		plt.savefig('./dataset/max_uncertainties.pdf')
+
+		plt.figure()
+		plt.plot(num_evaluated_list, mse_list)
+		plt.xlabel('Evaluated models')
+		plt.ylabel('Test MSE')
+		plt.savefig('./dataset/test_mse.pdf')
 
 	print(f'{pu.bcolors.OKGREEN}Convergence criterion reached!{pu.bcolors.ENDC}')
 
