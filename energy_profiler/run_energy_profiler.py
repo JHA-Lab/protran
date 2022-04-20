@@ -53,7 +53,7 @@ GLUE_TASKS = ['cola', 'mnli', 'mrpc', 'qnli', 'qqp', 'rte', 'sst2', 'stsb', 'wnl
 PREFIX_CHECKPOINT_DIR = "checkpoint"
 
 INIT_SAMPLER = 'Lhs' # Should be in ['Sobol', 'Lhs', 'Halton', Hammersly']
-INIT_SAMPLES = 64 # Should be power of 2
+INIT_SAMPLES = 16 # Should be power of 2
 
 RUNS = 3
 
@@ -64,7 +64,7 @@ if USE_NCS: from run_glue_onnx import main as run_glue_onnx
 RPI_IP = '10.9.173.6'
 
 CONVERGENCE_UNC_RATIO = 0.05 # Uncertainty w.r.t. the maximum performance value
-CONVERGENCE_MSE = 0.02 # MSE of surrogate model on test set
+CONVERGENCE_MSE = 0.003 # MSE of surrogate model on test set
 CONVERGENCE_PATIENCE = 5
 RANDOM_SAMPLES = 64 # Size of the random sample set to get predictions from surrogate models
 
@@ -365,10 +365,11 @@ def get_predictions(surrogate_models: tuple, X_ds):
 	return latency_predictions, energy_predictions, peak_power_predictions, max_uncertainty, max_uncertainty_idx
 
 
-def check_convergence(convergence_criterion: str, regressor: str, surrogate_models_dir: str, dataset: dict, design_space: dict, X: 'np.array', latency: 'np.array', energy: 'np.array', peak_power: 'np.array', max_uncertainty: float, debug: bool = False):
+def check_convergence(patience: int, convergence_criterion: str, regressor: str, surrogate_models_dir: str, dataset: dict, design_space: dict, X: 'np.array', latency: 'np.array', energy: 'np.array', peak_power: 'np.array', max_uncertainty: float, debug: bool = False):
     """Check if convergence has been reached
     
     Args:
+    	patience (int): current patience value
         convergence_criterion (str): convergence criterion to use, one in ['unc', 'mse']
         regressor (str): regressor in ['boshnas', 'gp', 'dt', 'bdt']
         surrogate_models_dir (str): directory to store the surrogate models
@@ -382,19 +383,18 @@ def check_convergence(convergence_criterion: str, regressor: str, surrogate_mode
         debug (bool, optional): to print debugging statements
     
     Returns:
-        convergence_reached, mse (tuple): if convergence has been reached, and the mean squared error when 
+        convergence_reached, mse, patience (tuple): if convergence has been reached, the mean squared error, and updated patience
     """
-    global patience
+    print(f'Current patience: {patience}/{CONVERGENCE_PATIENCE}')
     convergence_reached, mse = False, np.nan
 
     if not os.path.exists(surrogate_models_dir): os.makedirs(surrogate_models_dir)
 
     if convergence_criterion == 'unc':
-    	if max_uncertainty <= 3 * CONVERGENCE_UNC_RATIO or patience > CONVERGENCE_PATIENCE:
+    	if max_uncertainty <= 3 * CONVERGENCE_UNC_RATIO and patience > CONVERGENCE_PATIENCE:
     		convergence_reached = True
-    	else:
+    	elif max_uncertainty <= 3 * CONVERGENCE_UNC_RATIO:
     		patience += 1
-    		convergence_reached = False
     elif convergence_criterion == 'mse':
     	len_dataset = X.shape[0]
     	X_train, latency_train, energy_train, peak_power_train = X[:int(0.8 * len_dataset), :], latency[:int(0.8 * len_dataset)], energy[:int(0.8 * len_dataset)], peak_power[:int(0.8 * len_dataset)]
@@ -405,12 +405,14 @@ def check_convergence(convergence_criterion: str, regressor: str, surrogate_mode
 
     	latency_predictions, energy_predictions, peak_power_predictions, _, _ = get_predictions(surrogate_models, X_test)
     	mse = mean_squared_error(latency_test, latency_predictions[:, 0]) + mean_squared_error(energy_test, energy_predictions[:, 0]) + mean_squared_error(peak_power_test, peak_power_predictions[:, 0])
-    	if mse < 3 * CONVERGENCE_MSE:
+    	if mse <= 3 * CONVERGENCE_MSE and patience > CONVERGENCE_PATIENCE:
     		convergence_reached = True
+    	elif mse <= 3 * CONVERGENCE_MSE:
+    		patience += 1
 
     shutil.rmtree(surrogate_models_dir)
 
-    return convergence_reached, mse
+    return convergence_reached, mse, patience
 
 
 def main():
@@ -571,7 +573,7 @@ def main():
 		# Get predictions from the surrogate models
 		latency_predictions, energy_predictions, peak_power_predictions, max_uncertainty, max_uncertainty_idx = get_predictions(surrogate_models, X_ds)
 
-		convergence_reached, mse = check_convergence(args.convergence_criterion, args.regressor, './temp', dataset, design_space, X, latency, energy, peak_power, max_uncertainty, args.debug)
+		convergence_reached, mse, patience = check_convergence(patience, args.convergence_criterion, args.regressor, './temp', dataset, design_space, X, latency, energy, peak_power, max_uncertainty, args.debug)
 
 		if args.debug: print(f'Current maximum epistemic uncertainty: {float(max_uncertainty.item()) : 0.3f}, and test mean-squared error: {mse : 0.3f}, with number of evaluated models: {num_evaluated}')
 
