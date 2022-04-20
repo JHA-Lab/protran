@@ -62,11 +62,12 @@ def get_training_args(seed, max_seq_length, batch_size, model_name_or_path, outp
     return shlex.split(a)
 
 
-def get_power(device: str = 'cpu', debug: bool = False):
+def get_power(device: str = 'cpu', rpi_ip: str = None, debug: bool = False):
     """Get current power consumption
     
     Args:
         device (str, optional): device in ['cpu', 'gpu', 'npu']
+        rpi_ip (str, optional): IP address of the RPi connected to the INA219 sensor for power measurement
         debug (bool, optional): print statements if True
 
     Raises:
@@ -121,7 +122,7 @@ def get_power(device: str = 'cpu', debug: bool = False):
 
             # SSH to RPi. We assume keys have been shared already (https://www.thegeekstuff.com/2008/11/3-steps-to-perform-ssh-login-without-password-using-ssh-keygen-ssh-copy-id/)
             power_stdout = subprocess.check_output(
-                f'ssh pi@{RPI_IP} ". \'/home/pi/mambaforge/etc/profile.d/conda.sh\'; conda activate txf_design-space; python -c \'from ina219 import INA219; ina = INA219(shunt_ohms={SHUNT_OHMS}, address={INA_ADDRESS}); ina.configure(); print(ina.power())\'"',
+                f'ssh pi@{rpi_ip} ". \'/home/pi/mambaforge/etc/profile.d/conda.sh\'; conda activate txf_design-space; python -c \'from ina219 import INA219; ina = INA219(shunt_ohms={SHUNT_OHMS}, address={INA_ADDRESS}); ina.configure(); print(ina.power())\'"',
                 shell=True)
             device_power = float(power_stdout)
 
@@ -147,7 +148,7 @@ def get_power(device: str = 'cpu', debug: bool = False):
             elif device == 'npu':
                 # SSH to RPi. We assume keys have been shared already (https://www.thegeekstuff.com/2008/11/3-steps-to-perform-ssh-login-without-password-using-ssh-keygen-ssh-copy-id/)
                 power_stdout = subprocess.check_output(
-                    f'ssh pi@{RPI_IP} ". \'/home/pi/mambaforge/etc/profile.d/conda.sh\'; conda activate txf_design-space; python -c \'from ina219 import INA219; ina = INA219(shunt_ohms={SHUNT_OHMS}, address={INA_ADDRESS}); ina.configure(); print(ina.power())\'"',
+                    f'ssh pi@{rpi_ip} ". \'/home/pi/mambaforge/etc/profile.d/conda.sh\'; conda activate txf_design-space; python -c \'from ina219 import INA219; ina = INA219(shunt_ohms={SHUNT_OHMS}, address={INA_ADDRESS}); ina.configure(); print(ina.power())\'"',
                     shell=True, text=True)
                 npu_power = float(power_stdout)
 
@@ -283,7 +284,7 @@ def get_measures(device: str,
 
     # Get power consumption for first 5 iterations
     for i in range(5):
-        power_metrics.append({'power_metrics': get_power(device=device, debug=debug), 'time': time.time() - start_time})
+        power_metrics.append({'power_metrics': get_power(device=device, rpi_ip=rpi_ip, debug=debug), 'time': time.time() - start_time})
         if platform.system() == 'Linux': 
             if os.path.exists('/home/pi/'):
                 time.sleep(4)
@@ -309,7 +310,7 @@ def get_measures(device: str,
     for i in range(iterations):
         if start_counter: counter -= 1 # Inference ended, run for 5 more iterations
         if counter == 0: break
-        power_metrics.append({'power_metrics': get_power(device=device, debug=True), 'time': time.time() - start_time})
+        power_metrics.append({'power_metrics': get_power(device=device, rpi_ip=rpi_ip, debug=True), 'time': time.time() - start_time})
         if platform.system() == 'Linux': 
             if os.path.exists('/home/pi/'):
                 time.sleep(4)
@@ -390,7 +391,7 @@ def get_measures(device: str,
             [meas['time'] for meas in power_metrics][eval_start_idx:eval_end_idx])
 
         # Get peak power in W
-        peak_power = max([meas['power_metrics'][device] for meas in power_metrics][eval_start_idx:eval_end_idx])/1000 
+        peak_power = max([meas['power_metrics'][device]  for meas in power_metrics][eval_start_idx:eval_end_idx])/1000 
 
         # Make plot
         fig, ax1 = plt.subplots(1, 1)
