@@ -74,6 +74,7 @@ def worker(device: str,
 	model_dict: dict,
 	model_hash: str,
 	task: str = 'sst2',
+	num_samples: int = None,
 	batch_size: int = 1,
 	max_seq_length: int = 128,
 	runs: int = 3,
@@ -85,10 +86,11 @@ def worker(device: str,
 		models_dir (str): path to the models directory
 		model_dict (dict): model dictionary of the given model
 		model_hash (str): hash of the given model
-		task (str): GLUE task to run inference on
-		batch_size (int): batch size to be used for running inference
-		max_seq_length (int): maximum sequence length for running inference
-		runs (int): number of inference runs
+		task (str, optional): GLUE task to run inference on
+		num_samples (int, optional): number of samples in the validation set to run partial inference
+		batch_size (int, optional): batch size to be used for running inference
+		max_seq_length (int, optional): maximum sequence length for running inference
+		runs (int, optional): number of inference runs
 		debug (bool, optional): to pring debug statements and save power consumption figures
 	
 	Returns:
@@ -114,7 +116,7 @@ def worker(device: str,
 	model = BertModelModular(config_new)
 	model.save_pretrained(model_path)
 
-	performance_measures = energy_util.get_measures(device, model_path, batch_size, max_seq_length, runs, task, RPI_IP, debug)
+	performance_measures = energy_util.get_measures(device, model_path, batch_size, max_seq_length, runs, task, num_samples, RPI_IP, debug)
 
 	if not debug:
 		shutil.rmtree(model_path)
@@ -456,6 +458,11 @@ def main():
 		type=str,
 		help=f'name of GLUE task (or "glue") to train surrogate model for',
 		default='sst2')
+	parser.add_argument('--num_samples',
+		metavar='',
+		type=int,
+		help=f'number of samples in the validation set to run partial inference',
+		default=None)
 	parser.add_argument('--batch_size',
 		metavar='',
 		type=int,
@@ -505,7 +512,7 @@ def main():
 	for model_hash in dataset.keys():
 		if 'performance' in dataset[model_hash].keys(): continue
 		dataset[model_hash]['performance'] = \
-			worker(args.device, args.models_dir, dataset[model_hash]['model_dict'], model_hash, args.task, args.batch_size, args.max_seq_length, args.runs, args.debug)
+			worker(args.device, args.models_dir, dataset[model_hash]['model_dict'], model_hash, args.task, args.num_samples, args.batch_size, args.max_seq_length, args.runs, args.debug)
 
 	# Save dataset
 	num_evaluated = save_dataset(dataset, args.txf_dataset_file)
@@ -549,7 +556,7 @@ def main():
 		dataset[model_hash] = random_samples[model_hash]
 
 		# Run inference on given model
-		dataset[model_hash]['performance'] = worker(args.device, args.models_dir, dataset[model_hash]['model_dict'], model_hash, args.task, args.batch_size, args.max_seq_length, args.runs, args.debug)
+		dataset[model_hash]['performance'] = worker(args.device, args.models_dir, dataset[model_hash]['model_dict'], model_hash, args.task, args.num_samples, args.batch_size, args.max_seq_length, args.runs, args.debug)
 
 		# Print prediciton error
 		if args.debug: 
