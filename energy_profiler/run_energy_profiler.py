@@ -505,7 +505,7 @@ def main():
 	for model_hash in dataset.keys():
 		if 'performance' in dataset[model_hash].keys(): continue
 		dataset[model_hash]['performance'] = \
-			worker(args.device, args.models_dir, dataset[model_hash]['model_dict'], model_hash, args.task, args.batch_size, args.max_seq_length, args.runs, False)
+			worker(args.device, args.models_dir, dataset[model_hash]['model_dict'], model_hash, args.task, args.batch_size, args.max_seq_length, args.runs, args.debug)
 
 	# Save dataset
 	num_evaluated = save_dataset(dataset, args.txf_dataset_file)
@@ -549,7 +549,7 @@ def main():
 		dataset[model_hash] = random_samples[model_hash]
 
 		# Run inference on given model
-		dataset[model_hash]['performance'] = worker(args.device, args.models_dir, dataset[model_hash]['model_dict'], model_hash, args.task, args.batch_size, args.max_seq_length, args.runs, False)
+		dataset[model_hash]['performance'] = worker(args.device, args.models_dir, dataset[model_hash]['model_dict'], model_hash, args.task, args.batch_size, args.max_seq_length, args.runs, args.debug)
 
 		# Print prediciton error
 		if args.debug: 
