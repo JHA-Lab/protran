@@ -48,17 +48,30 @@ SUPPORTED_PIPELINES = [
 ]
 
 
-def get_training_args(seed, max_seq_length, batch_size, model_name_or_path, output_dir):
-    a = "--seed {} \
-    --do_eval \
-    --max_seq_length {} \
-    --task_name sst2 \
-    --per_device_train_batch_size 32 \
-    --per_device_eval_batch_size {} \
-    --learning_rate 1e-4 \
-    --model_name_or_path {} \
-    --output_dir {} \
-        ".format(seed, max_seq_length, batch_size, model_name_or_path, output_dir)
+def get_training_args(seed, max_seq_length, batch_size, model_name_or_path, output_dir, task, num_samples):
+    if num_samples is None:
+        a = "--seed {} \
+        --do_eval \
+        --max_seq_length {} \
+        --task_name {} \
+        --per_device_train_batch_size 32 \
+        --per_device_eval_batch_size {} \
+        --learning_rate 1e-4 \
+        --model_name_or_path {} \
+        --output_dir {} \
+            ".format(seed, max_seq_length, task, batch_size, model_name_or_path, output_dir)
+    else:
+        a = "--seed {} \
+        --do_eval \
+        --max_seq_length {} \
+        --task_name {} \
+        --max_val_samples {} \
+        --per_device_train_batch_size 32 \
+        --per_device_eval_batch_size {} \
+        --learning_rate 1e-4 \
+        --model_name_or_path {} \
+        --output_dir {} \
+            ".format(seed, max_seq_length, task, num_samples, batch_size, model_name_or_path, output_dir)
     return shlex.split(a)
 
 
@@ -160,7 +173,7 @@ def get_power(device: str = 'cpu', rpi_ip: str = None, debug: bool = False):
         raise RunTimeError(f'Unsupported OS: {platform.system()}')
 
 
-def run_bert_inference(queue, device: str, max_seq_length: int, batch_size: int, runs: int, model_path: str, task: str):
+def run_bert_inference(queue, device: str, max_seq_length: int, batch_size: int, runs: int, model_path: str, task: str, num_samples: int = None):
     """Run inference of given model on the given GLUE task
     
     Args:
@@ -171,6 +184,7 @@ def run_bert_inference(queue, device: str, max_seq_length: int, batch_size: int,
         runs (int): number of inference runs
         model_path (str): directory where the model is stored
         task (str): GLUE task to run inference on
+        num_samples (int, optional): number of samples in the validation set to run partial inference
     
     Returns:
         dict: evaluation metrics
@@ -179,20 +193,20 @@ def run_bert_inference(queue, device: str, max_seq_length: int, batch_size: int,
     for i in range(runs):
         if device == 'gpu':
             if platform.system() == 'Darwin':
-                run_glue_tf(get_training_args(0, max_seq_length, batch_size, model_path, model_path))
+                run_glue_tf(get_training_args(0, max_seq_length, batch_size, model_path, model_path, task, num_samples))
             else:
                 # We assume only one GPU is avilable. Else, use: os.environ['CUDA_VISIBLE_DEVICES'] = '0'
-                run_glue(get_training_args(0, max_seq_length, batch_size, model_path, model_path))
+                run_glue(get_training_args(0, max_seq_length, batch_size, model_path, model_path, task, num_samples))
         elif device == 'npu':
             if platform.system() != 'Linux':
                 raise RunTimeError('device is set to "npu", but only supported for Linux platform')
-            run_glue_onnx(get_training_args(0, max_seq_length, batch_size, os.path.join(model_path, 'onnx', 'model.xml'), model_path))
+            run_glue_onnx(get_training_args(0, max_seq_length, batch_size, os.path.join(model_path, 'onnx', 'model.xml'), model_path, task, num_samples))
         else:
             if platform.system() == 'Darwin':
-                run_glue(get_training_args(0, max_seq_length, batch_size, model_path, model_path))
+                run_glue(get_training_args(0, max_seq_length, batch_size, model_path, model_path, task, num_samples))
             else:
                 os.environ['CUDA_VISIBLE_DEVICES'] = ''
-                run_glue(get_training_args(0, max_seq_length, batch_size, model_path, model_path))
+                run_glue(get_training_args(0, max_seq_length, batch_size, model_path, model_path, task, num_samples))
 
     end_time = time.time()
 
@@ -221,6 +235,7 @@ def get_measures(device: str,
     max_seq_length: int, 
     runs: int, 
     task: str, 
+    num_samples: int = None, 
     rpi_ip: str = None, 
     debug: bool = False):
     """Get hardware performance measures - latency, energy, and peak power consumption per run of inference on the given task
@@ -232,6 +247,7 @@ def get_measures(device: str,
         max_seq_length (int): maximum sequence length for running inference
         runs (int): number of inference runs
         task (str): GLUE task to run inference on
+        num_samples (int, optional): number of samples in the validation set to run partial inference
         rpi_ip (str, optional): IP address of the RPi connected to the INA219 sensor for power measurement
         debug (bool, optional): to pring debug statements and save power consumption figures
     
@@ -277,7 +293,7 @@ def get_measures(device: str,
     bert_queue = mp.Queue()
 
     # Get process
-    bert_process = mp.Process(target=run_bert_inference, args=(bert_queue, device, max_seq_length, batch_size, runs, model_path, task))
+    bert_process = mp.Process(target=run_bert_inference, args=(bert_queue, device, max_seq_length, batch_size, runs, model_path, task, num_samples))
 
     start_time = time.time()
     power_metrics = []
@@ -287,9 +303,9 @@ def get_measures(device: str,
         power_metrics.append({'power_metrics': get_power(device=device, rpi_ip=rpi_ip, debug=debug), 'time': time.time() - start_time})
         if platform.system() == 'Linux': 
             if os.path.exists('/home/pi/'):
-                time.sleep(5)
+                time.sleep(4)
             elif os.path.exists('/home/nano/'):
-                time.sleep(5)
+                time.sleep(0.2)
             elif device == 'npu':
                 time.sleep(1)
             else:
@@ -315,9 +331,9 @@ def get_measures(device: str,
         power_metrics.append({'power_metrics': get_power(device=device, rpi_ip=rpi_ip, debug=True), 'time': time.time() - start_time})
         if platform.system() == 'Linux': 
             if os.path.exists('/home/pi/'):
-                time.sleep(5)
+                time.sleep(4)
             elif os.path.exists('/home/nano/'):
-                time.sleep(5)
+                time.sleep(0.2)
             elif device == 'npu':
                 time.sleep(1)
             else:
@@ -341,6 +357,16 @@ def get_measures(device: str,
     exp_start_time = power_metrics[0]['time']
     for i in range(len(power_metrics)):
         power_metrics[i]['time'] -= exp_start_time
+
+    # Find number of sequences in the dataset
+    if task != 'glue':
+        num_sequences = load_dataset('glue', task, split='validation').num_rows
+    else:
+        num_sequences = 0
+        for task in GLUE_TASKS:
+            num_sequences += load_dataset('glue', task, split='validation').num_rows
+
+    if num_samples is not None: num_sequences = num_samples
 
     # Make a plot of all power metrics and get energy
     if platform.system() == 'Darwin':
@@ -379,7 +405,7 @@ def get_measures(device: str,
         ax2.set_ylabel('GPU Power (mW)')
         ax3.set_ylabel('DRAM Power (mW)')
 
-        ax1.set_title(f'Model: BERT-Tiny | Task: {task} \n Energy: {energy/runs : 0.2f}J/run | Runtime: {eval_metrics["eval_runtime"]/runs : 0.2f}s/run')
+        ax1.set_title(f'Model: BERT-Tiny | Task: {task} | No. sequences: {num_sequences} \n Energy: {energy/runs : 0.2f}J/run | Runtime: {eval_metrics["eval_runtime"]/runs : 0.2f}s/run')
 
     elif platform.system() == 'Linux':
         color = 'b'
@@ -395,7 +421,7 @@ def get_measures(device: str,
             [meas['time'] for meas in power_metrics][eval_start_idx:eval_end_idx])
 
         # Get peak power in W
-        peak_power = max([meas['power_metrics'][device]  for meas in power_metrics][eval_start_idx:eval_end_idx])/1000 
+        peak_power = max([meas['power_metrics'][device] for meas in power_metrics][eval_start_idx:eval_end_idx])/1000 
 
         # Make plot
         fig, ax1 = plt.subplots(1, 1)
@@ -408,7 +434,7 @@ def get_measures(device: str,
         ax1.set_xlabel('Time (s)')
         ax1.set_ylabel(f'{device.upper()} Power (mW)')
 
-        ax1.set_title(f'Model: BERT-Tiny | Task: {task} \n Energy: {energy/runs : 0.2f}J/run | Runtime: {eval_metrics["eval_runtime"]/runs : 0.2f}s/run')
+        ax1.set_title(f'Model: BERT-Tiny | Task: {task} | No. sequences: {num_sequences} \n Energy: {energy/runs : 0.2f}J/run | Runtime: {eval_metrics["eval_runtime"]/runs : 0.2f}s/run')
 
     if debug: 
         plt.savefig(os.path.join(model_path, 'power_results.pdf'), bbox_inches='tight')
@@ -416,15 +442,10 @@ def get_measures(device: str,
 
     json.dump(power_metrics, open(os.path.join(model_path, 'power_metrics.json'), 'w+'))
 
-    # Find number of sequences in the dataset
-    if task != 'glue':
-        num_sequences = load_dataset('glue', task, split='validation').num_rows
-    else:
-        num_sequences = 0
-        for task in GLUE_TASKS:
-            num_sequences += load_dataset('glue', task, split='validation').num_rows
+    protran_results = {'latency': eval_metrics["eval_runtime"]/runs/num_sequences, 'energy': energy/runs/num_sequences, 'peak_power': peak_power}
+    json.dump(protran_results, open(os.path.join(model_path, 'protran_results.json'), 'w+'))
 
-    return {'latency': eval_metrics["eval_runtime"]/runs/num_sequences, 'energy': energy/runs/num_sequences, 'peak_power': peak_power}
+    return protran_results
 
 
 if __name__ == "__main__":
