@@ -287,7 +287,9 @@ def get_measures(device: str,
         power_metrics.append({'power_metrics': get_power(device=device, rpi_ip=rpi_ip, debug=debug), 'time': time.time() - start_time})
         if platform.system() == 'Linux': 
             if os.path.exists('/home/pi/'):
-                time.sleep(4)
+                time.sleep(5)
+            elif os.path.exists('/home/nano/'):
+                time.sleep(5)
             elif device == 'npu':
                 time.sleep(1)
             else:
@@ -297,9 +299,9 @@ def get_measures(device: str,
     bert_process.start()
 
     if platform.system() == 'Darwin':
-        iterations = 25
+        iterations = 200
     else:
-        iterations = 150
+        iterations = 800
 
     # Initialize evaluation runtime variables
     eval_start_time = 0
@@ -313,7 +315,9 @@ def get_measures(device: str,
         power_metrics.append({'power_metrics': get_power(device=device, rpi_ip=rpi_ip, debug=True), 'time': time.time() - start_time})
         if platform.system() == 'Linux': 
             if os.path.exists('/home/pi/'):
-                time.sleep(4)
+                time.sleep(5)
+            elif os.path.exists('/home/nano/'):
+                time.sleep(5)
             elif device == 'npu':
                 time.sleep(1)
             else:
