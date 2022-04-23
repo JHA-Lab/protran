@@ -7,7 +7,7 @@ import os
 import sys
 
 sys.path.append('../tests/')
-sys.path.append('../../../txf_design-space/transformers/src/transformers')
+sys.path.append('../../txf_design-space/transformers/src/transformers')
 
 import json
 import time
