@@ -49,14 +49,13 @@ from transformers.utils import logging as hf_logging
 from transformers import BertModel
 from transformers import RobertaTokenizer, RobertaModel
 from transformers.models.bert.configuration_bert import BertConfig
-from transformers.models.bert.modeling_modular_bert import BertModelModular, BertForMaskedLMModular, BertForSequenceClassificationModular
-
-# TODO: Implement modular BERT in Tensorflow
 from transformers.models.bert.modeling_modular_tf_bert import TFBertModelModular, TFBertForMaskedLMModular, TFBertForSequenceClassificationModular
 
 hf_logging.set_verbosity_info()
 hf_logging.enable_default_handler()
 hf_logging.enable_explicit_format()
+
+logging.getLogger().setLevel(logging.DEBUG)
 
 
 class Split(Enum):
@@ -208,13 +207,15 @@ def main(args):
         cache_dir=model_args.cache_dir,
     )
 
-    with training_args.strategy.scope():
-        model = BertForSequenceClassificationModular.from_pretrained(
-            model_args.model_name_or_path,
-            from_pt=True,
-            config=config,
-            cache_dir=model_args.cache_dir,
-        )
+    model = TFBertForSequenceClassificationModular(config)
+
+    # with training_args.strategy.scope():
+    #     model = TFBertForSequenceClassificationModular.from_pretrained(
+    #         model_args.model_name_or_path,
+    #         from_pt=True,
+    #         config=config,
+    #         cache_dir=model_args.cache_dir,
+    #     )
 
     # Get datasets
     train_dataset = (
@@ -262,6 +263,7 @@ def main(args):
         eval_dataset=eval_dataset,
         compute_metrics=compute_metrics,
     )
+    print('test')
 
     # Training
     if training_args.do_train:
