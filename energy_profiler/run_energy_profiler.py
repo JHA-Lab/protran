@@ -19,6 +19,7 @@ import torch
 import shlex
 import shutil
 import argparse
+import platform
 import subprocess
 import collections
 import numpy as np
@@ -43,6 +44,7 @@ from transformers import BertModel
 from transformers import RobertaTokenizer, RobertaModel
 from transformers.models.bert.configuration_bert import BertConfig
 from transformers.models.bert.modeling_modular_bert import BertModelModular, BertForMaskedLMModular, BertForSequenceClassificationModular
+from transformers.models.bert.modeling_modular_tf_bert import TFBertModelModular, TFBertForMaskedLMModular, TFBertForSequenceClassificationModular
 
 import warnings
 warnings.filterwarnings("ignore")
@@ -113,8 +115,12 @@ def worker(device: str,
 	config_new.save_pretrained(model_path)
 	
 	# Initialize and save given model
-	model = BertModelModular(config_new)
-	model.save_pretrained(model_path)
+	if platform.system() == 'Darwin' and device == 'gpu':
+		# Model runs on Tensorflow which does not require it to be saved
+		pass
+	else:
+		model = BertModelModular(config_new)
+		model.save_pretrained(model_path)
 
 	performance_measures = energy_util.get_measures(device, model_path, batch_size, max_seq_length, runs, task, num_samples, RPI_IP, debug)
 
@@ -506,6 +512,7 @@ def main():
 		dataset = embedding_util.get_samples(design_space, num_samples=INIT_SAMPLES, sampling_method=INIT_SAMPLER, debug=args.debug)
 
 		# Save dataset
+		if not os.path.exists(os.path.dirname(args.txf_dataset_file)): os.makedirs(os.path.dirname(args.txf_dataset_file))
 		num_evaluated = save_dataset(dataset, args.txf_dataset_file)
 
 	# Run inference initial samples
