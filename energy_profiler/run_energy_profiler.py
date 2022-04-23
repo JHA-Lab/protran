@@ -533,6 +533,9 @@ def main():
 
 	# Increase maximum values
 	max_latency, max_energy, max_peak_power = 2 * max_latency, 2 * max_energy, 2 * max_peak_power
+	if os.path.exists(os.path.join(args.surrogate_models_dir, 'max_values.json')):
+		max_values = json.load(open(os.path.join(args.surrogate_models_dir, 'max_values.json'), 'r'))
+		max_latency, max_energy, max_peak_power = max_values['max_latency'], max_values['max_energy'], max_values['max_peak_power']
 	if args.debug: print(f'Max latency: {max_latency : 0.3f}s/seq. Max energy: {max_energy : 0.3f}J/seq. Max peak power: {max_peak_power : 0.3f}W')
 
 	# Save maximum values for predition later
