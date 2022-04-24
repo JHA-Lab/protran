@@ -44,7 +44,9 @@ from transformers import BertModel
 from transformers import RobertaTokenizer, RobertaModel
 from transformers.models.bert.configuration_bert import BertConfig
 from transformers.models.bert.modeling_modular_bert import BertModelModular, BertForMaskedLMModular, BertForSequenceClassificationModular
-from transformers.models.bert.modeling_modular_tf_bert import TFBertModelModular, TFBertForMaskedLMModular, TFBertForSequenceClassificationModular
+
+if platform.system() == 'Darwin':
+	from transformers.models.bert.modeling_modular_tf_bert import TFBertModelModular, TFBertForMaskedLMModular, TFBertForSequenceClassificationModular
 
 import warnings
 warnings.filterwarnings("ignore")
