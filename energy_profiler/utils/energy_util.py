@@ -211,9 +211,12 @@ def run_bert_inference(queue, device: str, max_seq_length: int, batch_size: int,
     end_time = time.time()
 
     if platform.system() == 'Darwin':
-        with open(os.path.join(model_path, 'eval_results.txt')) as file:
-            lines = file.readlines()
-        eval_metrics = {'eval_loss': float(lines[0].split(' ')[-1]), 'eval_accuracy': float(lines[1].split(' ')[-1]), 'eval_runtime': end_time - start_time}
+        if device == 'gpu':
+            with open(os.path.join(model_path, 'eval_results.txt')) as file:
+                lines = file.readlines()
+            eval_metrics = {'eval_loss': float(lines[0].split(' ')[-1]), 'eval_accuracy': float(lines[1].split(' ')[-1]), 'eval_runtime': end_time - start_time}
+        else:
+            eval_metrics = json.load(open(os.path.join(model_path, 'eval_results.json'), 'r'))
     else:
         if device == 'npu':
             eval_metrics = {'eval_loss': np.nan, 'eval_accuracy': np.nan, 'eval_runtime': end_time - start_time}
@@ -315,9 +318,9 @@ def get_measures(device: str,
     bert_process.start()
 
     if platform.system() == 'Darwin':
-        iterations = 200
+        iterations = 400
     else:
-        iterations = 800
+        iterations = 1600
 
     # Initialize evaluation runtime variables
     eval_start_time = 0
