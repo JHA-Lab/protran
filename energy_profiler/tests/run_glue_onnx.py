@@ -24,7 +24,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 import numpy as np
-from datasets import load_dataset, load_metric
+from datasets import load_dataset, load_metric, load_from_disk
 
 import transformers
 from transformers import (
@@ -307,7 +307,7 @@ def main(args):
     # download model & vocab.
 
     # Load tokenizer
-    tokenizer = RobertaTokenizer.from_pretrained('../../txf_design-space/roberta_tokenizer')
+    tokenizer = RobertaTokenizer.from_pretrained('../txf_design-space/roberta_tokenizer')
 
     # Define BERT-Tiny model dictionary
     model_dict = {'l': 2, 'o': [['sa_sdp_64']*2]*2, 'h': [128]*2, 'f': [[512]]*2}
@@ -381,7 +381,16 @@ def main(args):
             result["label"] = [(label_to_id[l] if l != -1 else -1) for l in examples["label"]]
         return result
 
-    datasets = datasets.map(preprocess_function, batched=True, load_from_cache_file=not data_args.overwrite_cache)
+    print(f'Dataset being mapped...')
+
+    if not os.path.exists(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'huggingface_datasets')):
+        datasets = datasets.map(preprocess_function, batched=True, load_from_cache_file=not data_args.overwrite_cache)
+        datasets.save_to_disk(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'huggingface_datasets'))
+    else:
+        datasets = load_from_disk(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'huggingface_datasets'))
+
+    print(f'Dataset mapped!')
+
     if training_args.do_train:
         if "train" not in datasets:
             raise ValueError("--do_train requires a train dataset")
