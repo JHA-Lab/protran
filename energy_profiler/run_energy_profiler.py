@@ -520,6 +520,11 @@ def main():
 	# Run inference initial samples
 	for model_hash in dataset.keys():
 		if 'performance' in dataset[model_hash].keys(): continue
+		if os.path.exists(os.path.join(args.models_dir, model_hash, 'protran_results.json')):
+			print(f'Results already saved for model hash: {model_hash}')
+			protran_results = json.load(open(os.path.join(args.models_dir, model_hash, 'protran_results.json')))
+			dataset[model_hash]['performance'] = protran_results
+			continue
 		dataset[model_hash]['performance'] = \
 			worker(args.device, args.models_dir, dataset[model_hash]['model_dict'], model_hash, args.task, args.num_samples, args.batch_size, args.max_seq_length, args.runs, args.debug)
 
