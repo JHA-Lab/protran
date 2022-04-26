@@ -13,13 +13,19 @@ import json
 import time
 import torch
 import shlex
+import shutil
 import platform
 import subprocess
 import numpy as np
+from pathlib import Path
 import multiprocessing as mp
 from matplotlib import pyplot as plt
 
 from run_glue import main as run_glue
+try:
+    from run_glue_onnx import main as run_glue_onnx
+except:
+    print('Could not import ONNX library')
 if platform.system() == 'Darwin':
     # Running tensorflow version for macOS on arm64
     from run_glue_tf import main as run_glue_tf
@@ -29,6 +35,11 @@ if os.path.exists('/home/pi'):
 
 from convert_graph_to_onnx import convert
 from datasets import load_dataset
+
+from transformers import BertModel
+from transformers import RobertaTokenizer, RobertaModel
+from transformers.models.bert.configuration_bert import BertConfig
+from transformers.models.bert.modeling_modular_bert import BertModelModular, BertForMaskedLMModular, BertForSequenceClassificationModular
 
 
 SHUNT_OHMS = 0.1
@@ -267,7 +278,9 @@ def get_measures(device: str,
             stdout = subprocess.check_output('rm -rf /tmp/mvnc.mutex', shell=True, text=True)
 
         ncs_dir = os.path.join(model_path, 'onnx')
-        os.makedirs(ncs_dir)
+        if os.path.exists(ncs_dir): 
+            shutil.rmtree(ncs_dir)
+            os.makedirs(ncs_dir)
 
         # Load tokenizer and model
         tokenizer = RobertaTokenizer.from_pretrained('../txf_design-space/roberta_tokenizer/')
