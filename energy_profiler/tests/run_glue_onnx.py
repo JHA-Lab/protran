@@ -316,7 +316,7 @@ def main(args):
     config = BertConfig(vocab_size = tokenizer.vocab_size)
     config.from_model_dict_hetero(model_dict)
 
-    # Load model
+    # Setup sample model for implementing related functions
     model = BertForSequenceClassificationModular(config)
 
     # Preprocessing the datasets
