@@ -333,7 +333,7 @@ def get_measures(device: str,
     if platform.system() == 'Darwin':
         iterations = 400
     else:
-        iterations = 1600
+        iterations = 2000
 
     # Initialize evaluation runtime variables
     eval_start_time = 0
