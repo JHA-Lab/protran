@@ -616,6 +616,8 @@ def main():
 
 	print(f'{pu.bcolors.OKGREEN}Convergence criterion reached!{pu.bcolors.ENDC}')
 
+	# TODO: Add optimization of latency, energy, peak power
+
 
 if __name__ == '__main__':
 	torch.multiprocessing.set_start_method('spawn')
