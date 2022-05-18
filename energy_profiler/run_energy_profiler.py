@@ -60,6 +60,7 @@ INIT_SAMPLER = 'Lhs' # Should be in ['Sobol', 'Lhs', 'Halton', Hammersly']
 INIT_SAMPLES = 16 # Should be power of 2
 
 RUNS = 3
+SAVE_MODEL_DIR = False
 
 USE_GPU = True
 USE_NCS = False # Either USE_GPU or USE_NCS should be true, when OS is Linux
@@ -126,7 +127,7 @@ def worker(device: str,
 
 	performance_measures = energy_util.get_measures(device, model_path, batch_size, max_seq_length, runs, task, num_samples, RPI_IP, debug)
 
-	if not debug:
+	if not debug or not SAVE_MODEL_DIR:
 		shutil.rmtree(model_path)
 
 	return performance_measures
