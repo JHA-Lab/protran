@@ -577,7 +577,7 @@ def main():
 
 	max_uncertainties, mse_list, num_evaluated_list = [], [], []
 
-	error_patience, min_patience, error_convergence_reached, min_convergence_reached = 0, 0, True, False
+	error_patience, min_patience, error_convergence_reached, min_convergence_reached = 0, 0, False, False
 	min_values = (np.inf, np.inf, np.inf)
 	while not error_convergence_reached or not min_convergence_reached:
 		# Show which convergence has reached
