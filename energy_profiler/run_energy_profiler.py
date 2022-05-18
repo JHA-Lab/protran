@@ -70,7 +70,7 @@ RPI_IP = '10.9.173.6'
 
 CONVERGENCE_UNC_RATIO = 0.05 # Uncertainty w.r.t. the maximum performance value
 CONVERGENCE_MSE = 0.003 # MSE of surrogate model on test set
-CONVERGENCE_PATIENCE = 5
+CONVERGENCE_PATIENCE = 10
 RANDOM_SAMPLES = 64 # Size of the random sample set to get predictions from surrogate models
 
 
@@ -376,54 +376,66 @@ def get_predictions(surrogate_models: tuple, X_ds):
 	return latency_predictions, energy_predictions, peak_power_predictions, max_uncertainty, max_uncertainty_idx
 
 
-def check_convergence(patience: int, convergence_criterion: str, regressor: str, surrogate_models_dir: str, dataset: dict, design_space: dict, X: 'np.array', latency: 'np.array', energy: 'np.array', peak_power: 'np.array', max_uncertainty: float, debug: bool = False):
-    """Check if convergence has been reached
-    
-    Args:
-    	patience (int): current patience value
-        convergence_criterion (str): convergence criterion to use, one in ['unc', 'mse']
-        regressor (str): regressor in ['boshnas', 'gp', 'dt', 'bdt']
-        surrogate_models_dir (str): directory to store the surrogate models
+def check_convergence(patience: int, convergence_criterion: str, regressor: str, surrogate_models_dir: str, dataset: dict, design_space: dict, X: 'np.array', latency: 'np.array', energy: 'np.array', peak_power: 'np.array', max_uncertainty: float, prev_min_values: tuple, debug: bool = False):
+	"""Check if convergence has been reached
+	
+	Args:
+		patience (int): current patience value
+		convergence_criterion (str): convergence criterion to use, one in ['unc', 'mse', 'min']
+		regressor (str): regressor in ['boshnas', 'gp', 'dt', 'bdt']
+		surrogate_models_dir (str): directory to store the surrogate models
 		dataset (dict): dataset dictionary object
 		design_space (dict): design space loaded from the .yaml file
-        X (np.array): input embeddings
-        latency (np.array): latency values
+		X (np.array): input embeddings
+		latency (np.array): latency values
 		energy (np.array): energy values
 		peak_power (np.array): power values
-        max_uncertainty (float): maximum uncertainty in random samples outside of X
-        debug (bool, optional): to print debugging statements
-    
-    Returns:
-        convergence_reached, mse, patience (tuple): if convergence has been reached, the mean squared error, and updated patience
-    """
-    print(f'Current patience: {patience}/{CONVERGENCE_PATIENCE}')
-    convergence_reached, mse = False, np.nan
+		max_uncertainty (float): maximum uncertainty in random samples outside of X
+		prev_min_values (tuple): previous minimum values of latency, energy, and peak power
+		debug (bool, optional): to print debugging statements
+	
+	Returns:
+		convergence_reached, mse, patience, min_values (tuple): if convergence has been reached, the mean squared error, updated patience, and minimum values
+	"""
+	print(f'Current patience: {patience}/{CONVERGENCE_PATIENCE}')
+	convergence_reached, mse = False, np.nan
 
-    if not os.path.exists(surrogate_models_dir): os.makedirs(surrogate_models_dir)
+	if not os.path.exists(surrogate_models_dir): os.makedirs(surrogate_models_dir)
 
-    if convergence_criterion == 'unc':
-    	if max_uncertainty <= 3 * CONVERGENCE_UNC_RATIO and patience > CONVERGENCE_PATIENCE:
-    		convergence_reached = True
-    	elif max_uncertainty <= 3 * CONVERGENCE_UNC_RATIO:
-    		patience += 1
-    elif convergence_criterion == 'mse':
-    	len_dataset = X.shape[0]
-    	X_train, latency_train, energy_train, peak_power_train = X[:int(0.8 * len_dataset), :], latency[:int(0.8 * len_dataset)], energy[:int(0.8 * len_dataset)], peak_power[:int(0.8 * len_dataset)]
-    	X_test, latency_test, energy_test, peak_power_test = X[int(0.8 * len_dataset):, :], latency[int(0.8 * len_dataset):], energy[int(0.8 * len_dataset):], peak_power[int(0.8 * len_dataset):]
+	# Get MSE on test set
+	len_dataset = X.shape[0]
+	X_train, latency_train, energy_train, peak_power_train = X[:int(0.8 * len_dataset), :], latency[:int(0.8 * len_dataset)], energy[:int(0.8 * len_dataset)], peak_power[:int(0.8 * len_dataset)]
+	X_test, latency_test, energy_test, peak_power_test = X[int(0.8 * len_dataset):, :], latency[int(0.8 * len_dataset):], energy[int(0.8 * len_dataset):], peak_power[int(0.8 * len_dataset):]
 
-    	surrogate_models = init_surrogate_models(regressor, dataset, design_space, surrogate_models_dir, debug)
-    	train_surrogate_models(surrogate_models, X_train, latency_train, energy_train, peak_power_train, surrogate_models_dir)
+	surrogate_models = init_surrogate_models(regressor, dataset, design_space, surrogate_models_dir, debug)
+	train_surrogate_models(surrogate_models, X_train, latency_train, energy_train, peak_power_train, surrogate_models_dir)
 
-    	latency_predictions, energy_predictions, peak_power_predictions, _, _ = get_predictions(surrogate_models, X_test)
-    	mse = mean_squared_error(latency_test, latency_predictions[:, 0]) + mean_squared_error(energy_test, energy_predictions[:, 0]) + mean_squared_error(peak_power_test, peak_power_predictions[:, 0])
-    	if mse <= 3 * CONVERGENCE_MSE and patience > CONVERGENCE_PATIENCE:
-    		convergence_reached = True
-    	elif mse <= 3 * CONVERGENCE_MSE:
-    		patience += 1
+	latency_predictions, energy_predictions, peak_power_predictions, _, _ = get_predictions(surrogate_models, X_test)
+	mse = mean_squared_error(latency_test, latency_predictions[:, 0]) + mean_squared_error(energy_test, energy_predictions[:, 0]) + mean_squared_error(peak_power_test, peak_power_predictions[:, 0])
 
-    shutil.rmtree(surrogate_models_dir)
+	# Get minimum values of latency, energy, and peak power
+	min_values = (np.amin(latency), np.amin(energy), np.amin(peak_power))
 
-    return convergence_reached, mse, patience
+	if convergence_criterion == 'unc':
+		if max_uncertainty <= 3 * CONVERGENCE_UNC_RATIO and patience > CONVERGENCE_PATIENCE:
+			convergence_reached = True
+		elif max_uncertainty <= 3 * CONVERGENCE_UNC_RATIO:
+			patience += 1
+	elif convergence_criterion == 'mse':
+		if mse <= 3 * CONVERGENCE_MSE and patience > CONVERGENCE_PATIENCE:
+			convergence_reached = True
+		elif mse <= 3 * CONVERGENCE_MSE:
+			patience += 1
+	elif convergence_criterion == 'min':
+		if debug: print(f'Previous minimum values: {prev_min_values}. Current minimum values: {min_values}')
+		if np.allclose(min_values, prev_min_values) and patience > CONVERGENCE_PATIENCE:
+			convergence_reached = True
+		elif np.allclose(min_values, prev_min_values):
+			patience += 1
+
+	shutil.rmtree(surrogate_models_dir)
+
+	return convergence_reached, mse, patience, min_values
 
 
 def main():
@@ -565,21 +577,35 @@ def main():
 
 	max_uncertainties, mse_list, num_evaluated_list = [], [], []
 
-	patience, convergence_reached = 0, False
-	while not convergence_reached:
-		# Get the most uncertain model
-		model_hash = list(random_samples.keys())[max_uncertainty_idx]
+	error_patience, min_patience, error_convergence_reached, min_convergence_reached = 0, 0, True, False
+	min_values = (np.inf, np.inf, np.inf)
+	while not error_convergence_reached or not min_convergence_reached:
+		# Show which convergence has reached
+		print(f'{pu.bcolors.HEADER}Error convergence reached: {error_convergence_reached}. Minimization convergence reached: {min_convergence_reached}{pu.bcolors.ENDC}')
 
-		# Add this model to dataset
-		dataset[model_hash] = random_samples[model_hash]
+		# Get the most uncertain model or minimum prediction model
+		if not error_convergence_reached:
+			model_hashes = [list(random_samples.keys())[max_uncertainty_idx],]
+		elif not min_convergence_reached:
+			model_hashes = [list(random_samples.keys())[np.argmin(latency_predictions[:, 0])], list(random_samples.keys())[np.argmin(energy_predictions[:, 0])], list(random_samples.keys())[np.argmin(peak_power_predictions[:, 0])]]
 
-		# Run inference on given model
-		dataset[model_hash]['performance'] = worker(args.device, args.models_dir, dataset[model_hash]['model_dict'], model_hash, args.task, args.num_samples, args.batch_size, args.max_seq_length, args.runs, args.debug)
+		# Add these models to dataset
+		for model_hash in model_hashes:
+			dataset[model_hash] = random_samples[model_hash]
+
+		# Run inference on given models
+		for model_idx, model_hash in enumerate(model_hashes):
+			if len(model_hashes) == 1: print(f'{pu.bcolors.HEADER}Training maximum uncertainty model...{pu.bcolors.ENDC}')
+			elif model_idx == 0: print(f'{pu.bcolors.HEADER}Training minimum latency model...{pu.bcolors.ENDC}')
+			elif model_idx == 1: print(f'{pu.bcolors.HEADER}Training minimum energy model...{pu.bcolors.ENDC}')
+			elif model_idx == 2: print(f'{pu.bcolors.HEADER}Training minimum peak power model...{pu.bcolors.ENDC}')
+
+			dataset[model_hash]['performance'] = worker(args.device, args.models_dir, dataset[model_hash]['model_dict'], model_hash, args.task, args.num_samples, args.batch_size, args.max_seq_length, args.runs, args.debug)
 
 		# Print prediciton error
 		if args.debug: 
 			print(f'Predicted values -- Latency: {latency_predictions[max_uncertainty_idx][0] * max_latency : 0.5f}s/seq, Energy: {energy_predictions[max_uncertainty_idx][0] * max_energy : 0.5f}J/seq, Peak power: {peak_power_predictions[max_uncertainty_idx][0] * max_peak_power : 0.5f}W')
-			print(f'Evaluated values -- Latency: {dataset[model_hash]["performance"]["latency"]}s/seq, Energy: {dataset[model_hash]["performance"]["energy"]}J/seq, Peak power: {dataset[model_hash]["performance"]["peak_power"]}W')
+			print(f'Evaluated values -- Latency: {dataset[model_hash]["performance"]["latency"] : 0.5f}s/seq, Energy: {dataset[model_hash]["performance"]["energy"] : 0.5f}J/seq, Peak power: {dataset[model_hash]["performance"]["peak_power"] : 0.5f}W')
 
 		# Save dataset
 		num_evaluated = save_dataset(dataset, args.txf_dataset_file)
@@ -591,33 +617,35 @@ def main():
 		latency, energy, peak_power = latency/max_latency, energy/max_energy, peak_power/max_peak_power
 		train_surrogate_models(surrogate_models, X, latency, energy, peak_power, args.surrogate_models_dir)
 
-		# Get random samples of the entire dataset to obtain maximum uncertainty
+		# Get random samples of the entire dataset to obtain maximum uncertainty or minimum prediction model
 		random_samples = embedding_util.get_samples(design_space, num_samples=RANDOM_SAMPLES, sampling_method='Random', debug=False)
 		X_ds = convert_to_tabular(random_samples, only_embeddings=True)
 
 		# Get predictions from the surrogate models
 		latency_predictions, energy_predictions, peak_power_predictions, max_uncertainty, max_uncertainty_idx = get_predictions(surrogate_models, X_ds)
 
-		convergence_reached, mse, patience = check_convergence(patience, args.convergence_criterion, args.regressor, './temp', dataset, design_space, X, latency, energy, peak_power, max_uncertainty, args.debug)
+		if not error_convergence_reached:
+			error_convergence_reached, mse, error_patience, min_values = check_convergence(error_patience, args.convergence_criterion, args.regressor, './temp', dataset, design_space, X, latency, energy, peak_power, max_uncertainty, min_values, args.debug)
+		elif not min_convergence_reached:
+			min_convergence_reached, mse, min_patience, min_values = check_convergence(min_patience, 'min', args.regressor, './temp', dataset, design_space, X, latency, energy, peak_power, max_uncertainty, min_values, args.debug)
 
-		if args.debug: print(f'Current maximum epistemic uncertainty: {float(max_uncertainty.item()) : 0.3f}, and test mean-squared error: {mse : 0.3f}, with number of evaluated models: {num_evaluated}')
+		if args.debug: 
+			print(f'Current maximum epistemic uncertainty: {float(max_uncertainty.item()) : 0.3f}, and test mean-squared error: {mse : 0.3f}, with number of evaluated models: {num_evaluated}')
 
-		num_evaluated_list.append(num_evaluated); max_uncertainties.append(max_uncertainty); mse_list.append(mse)
-		plt.figure()
-		plt.plot(num_evaluated_list, max_uncertainties)
-		plt.xlabel('Evaluated models')
-		plt.ylabel('Norm. max. epistemic uncertainty')
-		plt.savefig('./dataset/max_uncertainties.pdf')
+			num_evaluated_list.append(num_evaluated); max_uncertainties.append(max_uncertainty); mse_list.append(mse)
+			plt.figure()
+			plt.plot(num_evaluated_list, max_uncertainties)
+			plt.xlabel('Evaluated models')
+			plt.ylabel('Norm. max. epistemic uncertainty')
+			plt.savefig('./dataset/max_uncertainties.pdf')
 
-		plt.figure()
-		plt.plot(num_evaluated_list, mse_list)
-		plt.xlabel('Evaluated models')
-		plt.ylabel('Test MSE')
-		plt.savefig('./dataset/test_mse.pdf')
+			plt.figure()
+			plt.plot(num_evaluated_list, mse_list)
+			plt.xlabel('Evaluated models')
+			plt.ylabel('Test MSE')
+			plt.savefig('./dataset/test_mse.pdf')
 
-	print(f'{pu.bcolors.OKGREEN}Convergence criterion reached!{pu.bcolors.ENDC}')
-
-	# TODO: Add optimization of latency, energy, peak power
+	print(f'{pu.bcolors.OKGREEN}Final convergence reached!{pu.bcolors.ENDC}')
 
 
 if __name__ == '__main__':
