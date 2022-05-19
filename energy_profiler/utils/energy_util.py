@@ -464,6 +464,3 @@ def get_measures(device: str,
     return protran_results
 
 
-if __name__ == "__main__":
-    main()
-
