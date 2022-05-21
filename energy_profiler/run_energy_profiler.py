@@ -70,6 +70,7 @@ RPI_IP = '10.9.173.6'
 
 CONVERGENCE_UNC_RATIO = 0.05 # Uncertainty w.r.t. the maximum performance value
 CONVERGENCE_MSE = 0.003 # MSE of surrogate model on test set
+CONVERGENCE_ABS_ERROR = 0.05 # Absolute percentage error in the latest prediction
 CONVERGENCE_PATIENCE = 10
 RANDOM_SAMPLES = 64 # Size of the random sample set to get predictions from surrogate models
 
@@ -376,7 +377,7 @@ def get_predictions(surrogate_models: tuple, X_ds):
 	return latency_predictions, energy_predictions, peak_power_predictions, max_uncertainty, max_uncertainty_idx
 
 
-def check_convergence(patience: int, convergence_criterion: str, regressor: str, surrogate_models_dir: str, dataset: dict, design_space: dict, X: 'np.array', latency: 'np.array', energy: 'np.array', peak_power: 'np.array', max_uncertainty: float, prev_min_values: tuple, debug: bool = False):
+def check_convergence(patience: int, convergence_criterion: str, regressor: str, surrogate_models_dir: str, dataset: dict, design_space: dict, X: 'np.array', latency: 'np.array', energy: 'np.array', peak_power: 'np.array', max_uncertainty: float, prev_min_values: tuple, latest_errors: tuple, debug: bool = False):
 	"""Check if convergence has been reached
 	
 	Args:
@@ -392,6 +393,7 @@ def check_convergence(patience: int, convergence_criterion: str, regressor: str,
 		peak_power (np.array): power values
 		max_uncertainty (float): maximum uncertainty in random samples outside of X
 		prev_min_values (tuple): previous minimum values of latency, energy, and peak power
+		latest_errors (tuple): latest absolute errors in percentage for latency, energy, and peak power
 		debug (bool, optional): to print debugging statements
 	
 	Returns:
@@ -432,6 +434,12 @@ def check_convergence(patience: int, convergence_criterion: str, regressor: str,
 			convergence_reached = True
 		elif np.allclose(min_values, prev_min_values):
 			patience += 1
+	elif convergence_reached == 'latest':
+		if latest_errors[0] <= CONVERGENCE_ABS_ERROR and latest_errors[1] <= CONVERGENCE_ABS_ERROR and latest_errors[2] <= CONVERGENCE_ABS_ERROR:
+			if patience > CONVERGENCE_PATIENCE:
+				convergence_reached = True
+			else:
+				patience += 1
 
 	shutil.rmtree(surrogate_models_dir)
 
@@ -452,7 +460,7 @@ def main():
 	parser.add_argument('--convergence_criterion',
 		metavar='',
 		type=str,
-		help='convergence criterion to use, one in ["unc", "mse"]',
+		help='convergence criterion to use, one in ["unc", "mse", "latest"]',
 		default='mse')
 	parser.add_argument('--design_space_file',
 		metavar='',
@@ -602,10 +610,17 @@ def main():
 
 			dataset[model_hash]['performance'] = worker(args.device, args.models_dir, dataset[model_hash]['model_dict'], model_hash, args.task, args.num_samples, args.batch_size, args.max_seq_length, args.runs, args.debug)
 
-		# Print prediciton error
-		if args.debug: 
-			print(f'Predicted values -- Latency: {latency_predictions[max_uncertainty_idx][0] * max_latency : 0.5f}s/seq, Energy: {energy_predictions[max_uncertainty_idx][0] * max_energy : 0.5f}J/seq, Peak power: {peak_power_predictions[max_uncertainty_idx][0] * max_peak_power : 0.5f}W')
-			print(f'Evaluated values -- Latency: {dataset[model_hash]["performance"]["latency"] : 0.5f}s/seq, Energy: {dataset[model_hash]["performance"]["energy"] : 0.5f}J/seq, Peak power: {dataset[model_hash]["performance"]["peak_power"] : 0.5f}W')
+			# Print prediciton error
+			if args.debug: 
+				if len(model_hashes) == 1: test_idx = max_uncertainty_idx
+				elif model_idx == 0: test_idx = np.argmin(latency_predictions[:, 0])
+				elif model_idx == 1: test_idx = np.argmin(energy_predictions[:, 0])
+				elif model_idx == 2: test_idx = np.argmin(peak_power_predictions[:, 0])
+				
+				print(f'Predicted values -- Latency: {latency_predictions[test_idx][0] * max_latency : 0.5f}s/seq, Energy: {energy_predictions[test_idx][0] * max_energy : 0.5f}J/seq, Peak power: {peak_power_predictions[test_idx][0] * max_peak_power : 0.5f}W')
+				print(f'Evaluated values -- Latency: {dataset[model_hash]["performance"]["latency"] : 0.5f}s/seq, Energy: {dataset[model_hash]["performance"]["energy"] : 0.5f}J/seq, Peak power: {dataset[model_hash]["performance"]["peak_power"] : 0.5f}W')
+
+				latest_errors = (abs(latency_predictions[test_idx][0] * max_latency - dataset[model_hash]["performance"]["latency"])/dataset[model_hash]["performance"]["latency"], abs(energy_predictions[test_idx][0] * max_energy - dataset[model_hash]["performance"]["energy"])/dataset[model_hash]["performance"]["energy"], abs(peak_power_predictions[test_idx][0] * max_peak_power - dataset[model_hash]["performance"]["peak_power"])/dataset[model_hash]["performance"]["peak_power"])
 
 		# Save dataset
 		num_evaluated = save_dataset(dataset, args.txf_dataset_file)
@@ -625,9 +640,9 @@ def main():
 		latency_predictions, energy_predictions, peak_power_predictions, max_uncertainty, max_uncertainty_idx = get_predictions(surrogate_models, X_ds)
 
 		if not error_convergence_reached:
-			error_convergence_reached, mse, error_patience, min_values = check_convergence(error_patience, args.convergence_criterion, args.regressor, './temp', dataset, design_space, X, latency, energy, peak_power, max_uncertainty, min_values, args.debug)
+			error_convergence_reached, mse, error_patience, min_values = check_convergence(error_patience, args.convergence_criterion, args.regressor, './temp', dataset, design_space, X, latency, energy, peak_power, max_uncertainty, min_values, latest_errors, args.debug)
 		elif not min_convergence_reached:
-			min_convergence_reached, mse, min_patience, min_values = check_convergence(min_patience, 'min', args.regressor, './temp', dataset, design_space, X, latency, energy, peak_power, max_uncertainty, min_values, args.debug)
+			min_convergence_reached, mse, min_patience, min_values = check_convergence(min_patience, 'min', args.regressor, './temp', dataset, design_space, X, latency, energy, peak_power, max_uncertainty, min_values, latest_errors, args.debug)
 
 		if args.debug: 
 			print(f'Current maximum epistemic uncertainty: {float(max_uncertainty.item()) : 0.3f}, and test mean-squared error: {mse : 0.3f}, with number of evaluated models: {num_evaluated}')
