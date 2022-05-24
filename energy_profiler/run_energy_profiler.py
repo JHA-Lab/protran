@@ -69,7 +69,7 @@ if USE_NCS: from run_glue_onnx import main as run_glue_onnx
 RPI_IP = '10.9.173.6'
 
 CONVERGENCE_UNC_RATIO = 0.05 # Uncertainty w.r.t. the maximum performance value
-CONVERGENCE_MSE = 0.003 # MSE of surrogate model on test set
+CONVERGENCE_MSE = 0.005 # MSE of surrogate model on test set
 CONVERGENCE_ABS_ERROR = 0.05 # Absolute percentage error in the latest prediction
 CONVERGENCE_PATIENCE = 10
 RANDOM_SAMPLES = 64 # Size of the random sample set to get predictions from surrogate models
@@ -413,7 +413,7 @@ def check_convergence(patience: int, convergence_criterion: str, regressor: str,
 	train_surrogate_models(surrogate_models, X_train, latency_train, energy_train, peak_power_train, surrogate_models_dir)
 
 	latency_predictions, energy_predictions, peak_power_predictions, _, _ = get_predictions(surrogate_models, X_test)
-	mse = mean_squared_error(latency_test, latency_predictions[:, 0]) + mean_squared_error(energy_test, energy_predictions[:, 0]) + mean_squared_error(peak_power_test, peak_power_predictions[:, 0])
+	mse = (mean_squared_error(latency_test, latency_predictions[:, 0]), mean_squared_error(energy_test, energy_predictions[:, 0]), mean_squared_error(peak_power_test, peak_power_predictions[:, 0]))
 
 	# Get minimum values of latency, energy, and peak power
 	min_values = (np.amin(latency), np.amin(energy), np.amin(peak_power))
@@ -424,10 +424,11 @@ def check_convergence(patience: int, convergence_criterion: str, regressor: str,
 		elif max_uncertainty <= 3 * CONVERGENCE_UNC_RATIO:
 			patience += 1
 	elif convergence_criterion == 'mse':
-		if mse <= 3 * CONVERGENCE_MSE and patience > CONVERGENCE_PATIENCE:
-			convergence_reached = True
-		elif mse <= 3 * CONVERGENCE_MSE:
-			patience += 1
+		if mse[0] <= CONVERGENCE_MSE and mse[1] <= CONVERGENCE_MSE and mse[2] <= CONVERGENCE_MSE:
+			if patience > CONVERGENCE_PATIENCE:
+				convergence_reached = True
+			else:
+				patience += 1
 	elif convergence_criterion == 'min':
 		if debug: print(f'Previous minimum values: {prev_min_values}. Current minimum values: {min_values}')
 		if np.allclose(min_values, prev_min_values) and patience > CONVERGENCE_PATIENCE:
@@ -645,7 +646,7 @@ def main():
 			min_convergence_reached, mse, min_patience, min_values = check_convergence(min_patience, 'min', args.regressor, './temp', dataset, design_space, X, latency, energy, peak_power, max_uncertainty, min_values, latest_errors, args.debug)
 
 		if args.debug: 
-			print(f'Current maximum epistemic uncertainty: {float(max_uncertainty.item()) : 0.3f}, and test mean-squared error: {mse : 0.3f}, with number of evaluated models: {num_evaluated}')
+			print(f'Current maximum epistemic uncertainty: {float(max_uncertainty.item()) : 0.3f}, and test mean-squared error: {sum(mse) : 0.3f}, with number of evaluated models: {num_evaluated}')
 
 			num_evaluated_list.append(num_evaluated); max_uncertainties.append(max_uncertainty); mse_list.append(mse)
 			plt.figure()
@@ -655,9 +656,12 @@ def main():
 			plt.savefig('./dataset/max_uncertainties.pdf')
 
 			plt.figure()
-			plt.plot(num_evaluated_list, mse_list)
+			plt.plot(num_evaluated_list, [mse[0] for mse in mse_list], label='Latency')
+			plt.plot(num_evaluated_list, [mse[1] for mse in mse_list], label='Energy')
+			plt.plot(num_evaluated_list, [mse[2] for mse in mse_list], label='Peak Power')
 			plt.xlabel('Evaluated models')
 			plt.ylabel('Test MSE')
+			plt.legend()
 			plt.savefig('./dataset/test_mse.pdf')
 
 	print(f'{pu.bcolors.OKGREEN}Final convergence reached!{pu.bcolors.ENDC}')
