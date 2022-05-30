@@ -331,9 +331,9 @@ def get_measures(device: str,
     bert_process.start()
 
     if platform.system() == 'Darwin':
-        iterations = 400
+        iterations = 1000
     else:
-        iterations = 2000
+        iterations = 5000
 
     # Initialize evaluation runtime variables
     eval_start_time = 0
