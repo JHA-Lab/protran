@@ -60,13 +60,13 @@ INIT_SAMPLER = 'Lhs' # Should be in ['Sobol', 'Lhs', 'Halton', Hammersly']
 INIT_SAMPLES = 16 # Should be power of 2
 
 RUNS = 3
-SAVE_MODEL_DIR = False
+SAVE_MODEL_DIR = True
 
 USE_GPU = True
 USE_NCS = False # Either USE_GPU or USE_NCS should be true, when OS is Linux
 if USE_NCS: from run_glue_onnx import main as run_glue_onnx
 
-RPI_IP = '10.9.173.6'
+RPI_IP = '192.168.0.161'
 
 CONVERGENCE_UNC_RATIO = 0.05 # Uncertainty w.r.t. the maximum performance value
 CONVERGENCE_MSE = 0.005 # MSE of surrogate model on test set
@@ -609,7 +609,12 @@ def main():
 			elif model_idx == 1: print(f'{pu.bcolors.HEADER}Training minimum energy model...{pu.bcolors.ENDC}')
 			elif model_idx == 2: print(f'{pu.bcolors.HEADER}Training minimum peak power model...{pu.bcolors.ENDC}')
 
-			dataset[model_hash]['performance'] = worker(args.device, args.models_dir, dataset[model_hash]['model_dict'], model_hash, args.task, args.num_samples, args.batch_size, args.max_seq_length, args.runs, args.debug)
+			if os.path.exists(os.path.join(args.models_dir, model_hash, 'protran_results.json')):
+				print(f'Results already saved for model hash: {model_hash}')
+				protran_results = json.load(open(os.path.join(args.models_dir, model_hash, 'protran_results.json')))
+				dataset[model_hash]['performance'] = protran_results
+			else:
+				dataset[model_hash]['performance'] = worker(args.device, args.models_dir, dataset[model_hash]['model_dict'], model_hash, args.task, args.num_samples, args.batch_size, args.max_seq_length, args.runs, args.debug)
 
 			# Print prediciton error
 			if args.debug: 
