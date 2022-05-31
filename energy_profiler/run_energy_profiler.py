@@ -586,7 +586,7 @@ def main():
 
 	max_uncertainties, mse_list, num_evaluated_list = [], [], [] 
 	if os.path.exists('./dataset/plot_data.json'):
-		plot_data = json,load(open('./dataset/plot_data.json', 'r'))
+		plot_data = json.load(open('./dataset/plot_data.json', 'r'))
 		max_uncertainties, mse_list, num_evaluated_list = plot_data['max_uncertainties'], plot_data['mse_list'], plot_data['num_evaluated_list']
 
 	error_patience, min_patience, error_convergence_reached, min_convergence_reached = 0, 0, False, False
