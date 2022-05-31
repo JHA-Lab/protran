@@ -584,7 +584,10 @@ def main():
 
 	if args.debug: print(f'Current maximum epistemic uncertainty: {float(max_uncertainty.item()) : 0.3f}, with number of evaluated models: {num_evaluated}')
 
-	max_uncertainties, mse_list, num_evaluated_list = [], [], []
+	max_uncertainties, mse_list, num_evaluated_list = [], [], [] 
+	if os.path.exists('./dataset/plot_data.json'):
+		plot_data = json,load(open('./dataset/plot_data.json', 'r'))
+		max_uncertainties, mse_list, num_evaluated_list = plot_data['max_uncertainties'], plot_data['mse_list'], plot_data['num_evaluated_list']
 
 	error_patience, min_patience, error_convergence_reached, min_convergence_reached = 0, 0, False, False
 	min_values = (np.inf, np.inf, np.inf)
@@ -654,6 +657,7 @@ def main():
 			print(f'Current maximum epistemic uncertainty: {float(max_uncertainty.item()) : 0.3f}, and test mean-squared error: {sum(mse) : 0.3f}, with number of evaluated models: {num_evaluated}')
 
 			num_evaluated_list.append(num_evaluated); max_uncertainties.append(max_uncertainty); mse_list.append(mse)
+			json.dump({'num_evaluated_list': num_evaluated_list, 'max_uncertainties': max_uncertainties, 'mse_list': mse_list}, open('./dataset/plot_data.json', 'w+'))
 			plt.figure()
 			plt.plot(num_evaluated_list, max_uncertainties)
 			plt.xlabel('Evaluated models')
