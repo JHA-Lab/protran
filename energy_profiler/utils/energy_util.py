@@ -331,7 +331,7 @@ def get_measures(device: str,
     bert_process.start()
 
     if platform.system() == 'Darwin':
-        iterations = 1000
+        iterations = 2000
     else:
         iterations = 5000
 
