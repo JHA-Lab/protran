@@ -53,6 +53,26 @@ cd ..
 ```
 All training scripts use bash and have been implemented using [SLURM](https://slurm.schedmd.com/documentation.html). This will have to be setup before running the experiments.
 
-## Replicating results
+## Developer
 
-Experiments are still being run. Stay tuned!
+[Shikhar Tuli](https://github.com/shikhartuli). For any questions, comments or suggestions, please reach me at [stuli@princeton.edu](mailto:stuli@princeton.edu).
+
+## Cite this work
+
+Cite our work using the following bitex entry:
+```bibtex
+@article{tuli2023edgetran,
+  title={{EdgeTran}: Device-Aware Co-Search of Transformers for Efficient Inference on Mobile Edge Platforms},
+  author={Tuli, Shikhar and Jha, Niraj K},
+  journal={IEEE Transactions on Mobile Computing},
+  year={2023}
+}
+```
+
+## License
+
+BSD-3-Clause. 
+Copyright (c) 2022, Shikhar Tuli and Jha Lab.
+All rights reserved.
+
+See License file for more details.
